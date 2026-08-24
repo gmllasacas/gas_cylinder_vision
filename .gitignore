@@ -1,0 +1,17 @@
+# Video files & source directories
+videos/
+training/videos/
+training/dataset/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+# Python virtual environment & caches
+venv/
+__pycache__/
+*.pyc
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store

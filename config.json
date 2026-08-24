@@ -1,0 +1,25 @@
+{
+  "source": {
+    "type": "video",
+    "video_file": "1min_test.mp4",
+    "camera_url": "rtsp://admin:password@192.168.1.100:554/stream1",
+    "camera_name": "IP Camera",
+    "reconnect_interval_sec": 3
+  },
+  "language": "es",
+  "detector": {
+    "default_model": "best.pt",
+    "fallback_model": "yolov8n.pt",
+    "confidence": 0.50,
+    "imgsz": 640,
+    "frame_skip": 2,
+    "line_points": [
+      [1200, 400],
+      [1700, 400]
+    ]
+  },
+  "streaming": {
+    "output_width": 1024,
+    "jpeg_quality": 70
+  }
+}
