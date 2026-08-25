@@ -246,7 +246,28 @@ async function fetchStatus() {
             playBtn.innerText = data.is_paused ? playText : pauseText;
         }
 
-        if (data.is_live) {
+        if (data.is_file_missing) {
+            if (errorBanner) {
+                errorBanner.classList.remove('hidden');
+                if (errorMsg) {
+                    errorMsg.innerText = data.connection_error_msg || (ui ? ui.video_missing : "⚠️ Video file not found");
+                }
+            }
+            if (badge) {
+                badge.innerText = ui ? ui.video_missing : "⚠️ FILE NOT FOUND";
+                badge.className = "bg-rose-600 text-white px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider shadow-sm animate-pulse";
+            }
+            if (slider) {
+                slider.disabled = true;
+                slider.classList.add('opacity-40', 'cursor-not-allowed');
+            }
+            [btnRewind, btnStepBack, btnStepFwd, btnForward, btnRestart].forEach(btn => {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-40', 'cursor-not-allowed');
+                }
+            });
+        } else if (data.is_live) {
             if (data.camera_connected) {
                 if (errorBanner) errorBanner.classList.add('hidden');
                 if (badge) {

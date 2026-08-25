@@ -8,6 +8,7 @@
     "live_camera": "🔴 CÁMARA EN VIVO",
     "cam_connecting": "⚠️ CONECTANDO...",
     "cam_disconnected": "⚠️ Cámara Desconectada (Reintentando...)",
+    "video_missing": "⚠️ ARCHIVO NO ENCONTRADO",
     "kpi_in": "Entradas (IN)",
     "kpi_out": "Salidas (OUT)",
     "kpi_net": "Total Neto Diario",
@@ -41,6 +42,8 @@
     "default_class": "gas_tank",
     "offline_title": "CAMARA FUERA DE LINEA / INACCESIBLE",
     "offline_subtitle": "Verifique URL RTSP, conexion de red o credenciales",
-    "offline_retry": "Reconectando automaticamente cada"
+    "offline_retry": "Reconectando automaticamente cada",
+    "file_missing_title": "ARCHIVO DE VIDEO NO ENCONTRADO",
+    "file_missing_subtitle": "Coloque el archivo en videos/ o modifique config.json"
   }
 }

@@ -27,7 +27,7 @@ DEFAULT_CONFIG = {
     "detector": {
         "default_model": "best.pt",
         "fallback_model": "yolov8n.pt",
-        "confidence": 0.25,
+        "confidence": 0.50,
         "imgsz": 640,
         "frame_skip": 2,
         "line_points": [[1200, 400], [1700, 400]]
@@ -81,6 +81,7 @@ class VideoStreamService:
         self.reconnect_interval_sec = src_cfg.get("reconnect_interval_sec", 3)
         self.last_reconnect_attempt = 0.0
         self.camera_connected = False
+        self.is_file_missing = False
         self.connection_error_msg = ""
         
         if source_type == "camera":
@@ -95,6 +96,20 @@ class VideoStreamService:
             self.current_source_id = video_name
             self.current_source_path = os.path.join(self.videos_dir, video_name)
             
+        # Performance & Tuning Parameters from config
+        det_cfg = self.config.get("detector", {})
+        stream_cfg = self.config.get("streaming", {})
+        self.conf = det_cfg.get("confidence", 0.50)
+        self.imgsz = det_cfg.get("imgsz", 640)
+        self.frame_skip = det_cfg.get("frame_skip", 2)
+        self.output_width = stream_cfg.get("output_width", 1024)
+        self.jpeg_quality = stream_cfg.get("jpeg_quality", 70)
+        
+        # Counting line: [(x1, y), (x2, y)]
+        cfg_line = det_cfg.get("line_points", [[1200, 400], [1700, 400]])
+        self.line_points = [tuple(p) for p in cfg_line]
+        self.last_frame_bytes: Optional[bytes] = None
+        
         # Video properties & timing defaults
         self.total_frames = 0
         self.video_fps = 25.0
@@ -103,14 +118,6 @@ class VideoStreamService:
         self.is_paused = False
         self.loop = True
         self.playback_speed = 1.0
-        
-        self.cap = cv2.VideoCapture()
-        self._connect_stream(self.current_source_path)
-        
-        # Counting line: [(x1, y), (x2, y)]
-        cfg_line = self.config.get("detector", {}).get("line_points", [[1200, 400], [1700, 400]])
-        self.line_points = [tuple(p) for p in cfg_line]
-        self.last_frame_bytes: Optional[bytes] = None
         
         # Resolve active model from models/
         best_model_path = os.path.join(self.models_dir, "best.pt")
@@ -123,16 +130,7 @@ class VideoStreamService:
             self.active_model = os.path.join(BASE_DIR, "best.pt")
         else:
             self.active_model = "yolov8n.pt"
-        
-        # Performance & Tuning Parameters
-        det_cfg = self.config.get("detector", {})
-        stream_cfg = self.config.get("streaming", {})
-        self.conf = det_cfg.get("confidence", 0.25)
-        self.imgsz = det_cfg.get("imgsz", 640)
-        self.frame_skip = det_cfg.get("frame_skip", 2)
-        self.output_width = stream_cfg.get("output_width", 1024)
-        self.jpeg_quality = stream_cfg.get("jpeg_quality", 70)
-        
+            
         self.frame_counter = 0
         self.last_results = None
         self.last_boxes_list = []
@@ -155,10 +153,16 @@ class VideoStreamService:
         self.counted_out_ids: Set[int] = set()
         
         self._init_counter()
-
-        # Dedicated Background Worker Thread
+        
+        # Background Worker Synchronization
         self.running = True
         self.new_frame_event = threading.Event()
+        
+        # Initialize capture & connect to stream / file
+        self.cap = cv2.VideoCapture()
+        self._connect_stream(self.current_source_path)
+
+        # Dedicated Background Worker Thread
         self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker_thread.start()
 
@@ -183,7 +187,7 @@ class VideoStreamService:
         return url
 
     def _generate_standby_frame(self) -> np.ndarray:
-        """Generates visual status canvas (Offline / Connecting)."""
+        """Generates visual status canvas (Video File Missing / Camera Offline)."""
         width = self.output_width
         height = int(width * 9 / 16)
         
@@ -200,9 +204,17 @@ class VideoStreamService:
         # Resolve localized text from JSON
         locale_data = self.locales.get(self.lang, self.locales.get("en", {}))
         video_i18n = locale_data.get("video", {})
-        title_text = video_i18n.get("offline_title", "CAMERA OFFLINE / UNREACHABLE")
-        sub_text = video_i18n.get("offline_subtitle", "Check RTSP URL, Network connection or Credentials")
-        retry_text = f"{video_i18n.get('offline_retry', 'Auto-reconnecting every')} {self.reconnect_interval_sec}s..."
+        
+        if self.is_file_missing:
+            title_text = video_i18n.get("file_missing_title", "VIDEO FILE NOT FOUND")
+            sub_text = video_i18n.get("file_missing_subtitle", "Place the file inside videos/ or update config.json")
+            target_str = f"Missing Target: videos/{os.path.basename(self.current_source_path)}"
+            retry_text = "Waiting for video file..."
+        else:
+            title_text = video_i18n.get("offline_title", "CAMERA OFFLINE / UNREACHABLE")
+            sub_text = video_i18n.get("offline_subtitle", "Check RTSP URL, Network connection or Credentials")
+            target_str = f"Stream Target: {self._mask_url_credentials(self.current_source_path)}"
+            retry_text = f"{video_i18n.get('offline_retry', 'Auto-reconnecting every')} {self.reconnect_interval_sec}s..."
         
         # Title
         cv2.putText(frame, "[ ! ] " + title_text, (pad_x + 30, center_y - 55), cv2.FONT_HERSHEY_SIMPLEX, 0.78, (68, 68, 239), 2, cv2.LINE_AA)
@@ -210,9 +222,8 @@ class VideoStreamService:
         # Subtitle Advice
         cv2.putText(frame, sub_text, (pad_x + 30, center_y - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (148, 163, 184), 1, cv2.LINE_AA)
         
-        # Masked Stream Target
-        masked_target = self._mask_url_credentials(self.current_source_path)
-        cv2.putText(frame, f"Stream Target: {masked_target}", (pad_x + 30, center_y + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (203, 213, 225), 1, cv2.LINE_AA)
+        # Target path
+        cv2.putText(frame, target_str, (pad_x + 30, center_y + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (203, 213, 225), 1, cv2.LINE_AA)
         
         # Status / Retry Notice
         cv2.putText(frame, retry_text, (pad_x + 30, center_y + 70), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (52, 211, 153), 2, cv2.LINE_AA)
@@ -235,17 +246,30 @@ class VideoStreamService:
         
         try:
             if self.is_live_stream:
+                self.is_file_missing = False
                 src = int(source_path) if source_path.isdigit() else source_path
                 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;3000000"
                 self.cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
                 self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             else:
+                # Video file validation
+                if not os.path.exists(source_path):
+                    self.is_file_missing = True
+                    self.camera_connected = False
+                    self.total_frames = 0
+                    self.connection_error_msg = f"Video file not found: {os.path.basename(source_path)}"
+                    print(f"[Error] {self.connection_error_msg}")
+                    self._emit_standby_frame()
+                    return False
+                
+                self.is_file_missing = False
                 self.cap = cv2.VideoCapture(source_path)
 
             if self.cap.isOpened():
                 ret, test_frame = self.cap.read()
                 if ret and test_frame is not None:
                     self.camera_connected = True
+                    self.is_file_missing = False
                     self.connection_error_msg = ""
                     if self.is_live_stream:
                         self.total_frames = 0
@@ -259,15 +283,16 @@ class VideoStreamService:
                     return True
                 else:
                     self.camera_connected = False
-                    self.connection_error_msg = "Stream opened but failed to read initial frame."
+                    self.connection_error_msg = "Stream/file opened but failed to read initial frame."
             else:
                 self.camera_connected = False
-                self.connection_error_msg = "Could not open stream endpoint. Verify network & credentials."
+                self.connection_error_msg = "Could not open stream endpoint or video file."
         except Exception as e:
             self.camera_connected = False
             self.connection_error_msg = str(e)
-            print(f"[Error] Stream connection failed: {e}")
+            print(f"[Error] Connection failed: {e}")
 
+        self._emit_standby_frame()
         return self.camera_connected
 
     def get_available_videos(self) -> List[str]:
@@ -308,9 +333,6 @@ class VideoStreamService:
                 self.current_video_name = src_cfg.get("camera_name", "IP Camera")
             else:
                 target_path = os.path.join(self.videos_dir, os.path.basename(source_id))
-                if not os.path.exists(target_path):
-                    print(f"[Warning] Video not found: {target_path}")
-                    return False
                 self.current_source_id = os.path.basename(source_id)
                 self.current_video_name = os.path.basename(source_id)
 
@@ -632,7 +654,16 @@ class VideoStreamService:
 
             if not self.is_paused:
                 with self.lock:
-                    if self.is_live_stream:
+                    if self.is_file_missing:
+                        # Video file not found: maintain standby error canvas
+                        now = time.time()
+                        if (now - self.last_reconnect_attempt) >= 2.0:
+                            self.last_reconnect_attempt = now
+                            if os.path.exists(self.current_source_path):
+                                self._connect_stream(self.current_source_path)
+                            else:
+                                self._emit_standby_frame()
+                    elif self.is_live_stream:
                         if not self.cap.isOpened() or not self.camera_connected:
                             now = time.time()
                             if (now - self.last_reconnect_attempt) >= self.reconnect_interval_sec:
@@ -670,11 +701,11 @@ class VideoStreamService:
                                     self.is_paused = True
             
             elapsed = time.time() - start_t
-            sleep_time = max(0.001, target_delay - elapsed) if (not self.is_paused and (not self.is_live_stream or self.camera_connected)) else 0.4
+            sleep_time = max(0.001, target_delay - elapsed) if (not self.is_paused and not self.is_file_missing and (not self.is_live_stream or self.camera_connected)) else 0.4
             time.sleep(sleep_time)
 
     def seek_frame(self, target_frame: int):
-        if self.is_live_stream:
+        if self.is_live_stream or self.is_file_missing:
             return
         with self.lock:
             if not self.cap.isOpened() or self.total_frames <= 0:
@@ -691,14 +722,14 @@ class VideoStreamService:
                 self._process_and_encode(im0)
 
     def seek_offset(self, seconds_offset: float):
-        if self.is_live_stream:
+        if self.is_live_stream or self.is_file_missing:
             return
         frame_offset = int(seconds_offset * self.video_fps)
         target = self.current_frame + frame_offset
         self.seek_frame(target)
 
     def step(self, frame_delta: int):
-        if self.is_live_stream:
+        if self.is_live_stream or self.is_file_missing:
             return
         target = self.current_frame + frame_delta
         self.seek_frame(target)
@@ -716,7 +747,7 @@ class VideoStreamService:
         with self.lock:
             self._reset_counts_internal()
             self._init_counter()
-            if not self.is_live_stream and self.cap.isOpened():
+            if not self.is_live_stream and not self.is_file_missing and self.cap.isOpened():
                 self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 self.current_frame = 0
                 self.frame_counter = 0
@@ -730,12 +761,13 @@ class VideoStreamService:
         with self.lock:
             self._sync_counts_from_counter()
             
-            current_time = (self.current_frame / self.video_fps) if (not self.is_live_stream and self.video_fps > 0) else 0.0
-            duration = (self.total_frames / self.video_fps) if (not self.is_live_stream and self.video_fps > 0) else 0.0
+            current_time = (self.current_frame / self.video_fps) if (not self.is_live_stream and not self.is_file_missing and self.video_fps > 0) else 0.0
+            duration = (self.total_frames / self.video_fps) if (not self.is_live_stream and not self.is_file_missing and self.video_fps > 0) else 0.0
             return {
                 "current_video": self.current_video_name,
                 "current_source_id": self.current_source_id,
                 "is_live": self.is_live_stream,
+                "is_file_missing": self.is_file_missing,
                 "camera_connected": self.camera_connected,
                 "connection_error_msg": self.connection_error_msg,
                 "active_model": os.path.basename(self.active_model),
@@ -775,9 +807,9 @@ class VideoStreamService:
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
                 time.sleep(0.015)
-        except (GeneratorExit, asyncio.CancelledError if 'asyncio' in globals() else GeneratorExit):
+        except GeneratorExit:
             pass
-        except Exception as e:
+        except Exception:
             pass
 
 video_service = VideoStreamService()

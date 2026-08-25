@@ -8,6 +8,7 @@
     "live_camera": "🔴 LIVE CAMERA",
     "cam_connecting": "⚠️ CONNECTING...",
     "cam_disconnected": "⚠️ Camera Unreachable (Reconnecting...)",
+    "video_missing": "⚠️ VIDEO NOT FOUND",
     "kpi_in": "Inbound (IN)",
     "kpi_out": "Outbound (OUT)",
     "kpi_net": "Net Daily Total",
@@ -41,6 +42,8 @@
     "default_class": "gas_tank",
     "offline_title": "CAMERA OFFLINE / UNREACHABLE",
     "offline_subtitle": "Check RTSP URL, Network connection or Credentials",
-    "offline_retry": "Auto-reconnecting every"
+    "offline_retry": "Auto-reconnecting every",
+    "file_missing_title": "VIDEO FILE NOT FOUND",
+    "file_missing_subtitle": "Place the file inside videos/ or update config.json"
   }
 }
