@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  gas_stream:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gas_stream_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+    volumes:
+      - ./config.json:/app/config.json:rw
+      - ./videos:/app/videos:ro
+      - ./models:/app/models:ro

@@ -1,0 +1,17 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+.agents/
+.vscode/
+.pytest_cache/
+tests/
+videos/*.mp4
+videos/*.avi
+videos/*.mov
+training/dataset/
+training/videos/

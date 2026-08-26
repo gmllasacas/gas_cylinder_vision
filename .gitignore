@@ -14,4 +14,6 @@ __pycache__/
 # IDE & OS files
 .vscode/
 .idea/
-.DS_Store
+.env
+.pytest_cache/
+*.pt
