@@ -34,7 +34,16 @@
     "nerd_tracks": "Objetos Activos:",
     "nerd_counts": "Conteo de Tanques:",
     "shortcuts": "Atajos: <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">Espacio</span> Repr/Pausar &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">&larr;</span> / <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">&rarr;</span> &plusmn;5s &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">[</span> / <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">]</span> &plusmn;1 Cuadro &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">R</span> Reiniciar &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">N</span> Estadísticas",
-    "reset_confirm": "¿Reiniciar los conteos del detector y volver al inicio del video?"
+    "reset_confirm": "¿Reiniciar los conteos del detector y volver al inicio del video?",
+    "daily_history_title": "Historial Diario de Conteos (SQLite)",
+    "col_date": "Fecha",
+    "col_in": "Entradas (IN)",
+    "col_out": "Salidas (OUT)",
+    "col_net": "Total Neto",
+    "col_updated": "Última Actualización",
+    "db_synced": "💾 SQLite Sincronizado",
+    "no_records": "No hay registros diarios guardados aún",
+    "btn_refresh": "↻ Actualizar"
   },
   "video": {
     "out_text": "^ SALIDA (Arriba)",

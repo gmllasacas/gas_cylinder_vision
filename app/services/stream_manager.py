@@ -3,6 +3,7 @@ import time
 import threading
 from typing import Optional, List, Dict, Any
 from app.core import settings, logger, i18n
+from app.db import db_repo
 from app.cv import (
     VideoCaptureManager,
     YOLODetector,
@@ -19,10 +20,12 @@ class VideoStreamService:
         self.lock = threading.Lock()
         self.settings = settings
         self.i18n = i18n
+        self.db = db_repo
 
         # Ensure storage directories
         os.makedirs(self.settings.videos_dir, exist_ok=True)
         os.makedirs(self.settings.models_dir, exist_ok=True)
+        os.makedirs(self.settings.data_dir, exist_ok=True)
 
         # 1. Initialize CV Components
         self.capture = VideoCaptureManager(
@@ -37,7 +40,20 @@ class VideoStreamService:
             frame_skip=self.settings.detector.frame_skip,
             line_points=self.settings.detector.line_points
         )
-        self.counter = LineCrossingCounter(line_points=self.settings.detector.line_points)
+        self.counter = LineCrossingCounter(
+            line_points=self.settings.detector.line_points,
+            on_crossing=self._on_line_crossing
+        )
+        # Load today's persistent counts from SQLite
+        try:
+            today_record = self.db.get_or_create_daily()
+            self.counter.set_counts(
+                today_record.get("in_count", 0),
+                today_record.get("out_count", 0)
+            )
+        except Exception as e:
+            logger.warning(f"Could not load today's count from database: {e}")
+
         self.renderer = FrameRenderer(
             i18n=self.i18n,
             output_width=self.settings.streaming.output_width,
@@ -208,9 +224,27 @@ class VideoStreamService:
                 self.last_frame_bytes = self.pipeline.process_frame(frame)
                 self.new_frame_event.set()
 
-    def reset(self):
+    def _on_line_crossing(self, direction: str, track_id: int):
+        """Callback invoked whenever an object crosses the detection line."""
+        try:
+            cur_frame = self.capture.current_frame if hasattr(self, 'capture') else 0
+            self.db.record_crossing(
+                direction=direction,
+                track_id=track_id,
+                source_id=self.current_source_id,
+                frame_number=cur_frame
+            )
+        except Exception as e:
+            logger.error(f"Error persisting line crossing event: {e}")
+
+    def reset(self, reset_db: bool = True):
         with self.lock:
             self.pipeline.reset()
+            if reset_db:
+                try:
+                    self.db.reset_daily_count()
+                except Exception as e:
+                    logger.error(f"Error resetting database counts: {e}")
             if not self.capture.is_live_stream and not self.capture.is_file_missing:
                 success, frame = self.capture.reset_position()
                 if success and frame is not None:

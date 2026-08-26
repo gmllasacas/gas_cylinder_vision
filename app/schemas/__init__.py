@@ -7,6 +7,14 @@ from app.schemas.settings import (
     LanguageUpdateRequest,
     DebugToggleRequest,
 )
+from app.schemas.counts import (
+    DailyCountItem,
+    DailyCountResponse,
+    DailyCountHistoryResponse,
+    CountEventItem,
+    CountEventsResponse,
+    ResetCountResponse,
+)
 
 __all__ = [
     "StreamStatusResponse",
@@ -19,4 +27,11 @@ __all__ = [
     "SpeedUpdateRequest",
     "LanguageUpdateRequest",
     "DebugToggleRequest",
+    "DailyCountItem",
+    "DailyCountResponse",
+    "DailyCountHistoryResponse",
+    "CountEventItem",
+    "CountEventsResponse",
+    "ResetCountResponse",
 ]
+

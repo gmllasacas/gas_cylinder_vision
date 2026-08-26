@@ -1,16 +1,26 @@
-from typing import List, Tuple, Dict, Set, Optional, Any
+from typing import List, Tuple, Dict, Set, Optional, Any, Callable
 
 class LineCrossingCounter:
     """Tracks object trajectories and computes directional line crossings."""
 
-    def __init__(self, line_points: Optional[List[List[int]]] = None):
+    def __init__(
+        self,
+        line_points: Optional[List[List[int]]] = None,
+        on_crossing: Optional[Callable[[str, int], None]] = None
+    ):
         self.line_points = [tuple(p) for p in (line_points or [[1200, 400], [1700, 400]])]
+        self.on_crossing = on_crossing
         self.in_count = 0
         self.out_count = 0
         self.active_tracks_count = 0
         self.track_history: Dict[int, List[Tuple[int, int]]] = {}
         self.counted_in_ids: Set[int] = set()
         self.counted_out_ids: Set[int] = set()
+
+    def set_counts(self, in_count: int = 0, out_count: int = 0):
+        """Sets initial or synchronized count values."""
+        self.in_count = int(in_count)
+        self.out_count = int(out_count)
 
     def set_line_points(self, points: List[List[int]]):
         self.line_points = [tuple(p) for p in points]
@@ -72,6 +82,11 @@ class LineCrossingCounter:
                     self.in_count += 1
                     self.counted_in_ids.add(track_id)
                     self.counted_out_ids.discard(track_id)
+                    if self.on_crossing:
+                        try:
+                            self.on_crossing("IN", track_id)
+                        except Exception:
+                            pass
 
             # 2. Going Above (Bottom -> Top): previous was below line, current is at/above line
             elif prev_cy > line_y and cy <= line_y:
@@ -79,6 +94,11 @@ class LineCrossingCounter:
                     self.out_count += 1
                     self.counted_out_ids.add(track_id)
                     self.counted_in_ids.discard(track_id)
+                    if self.on_crossing:
+                        try:
+                            self.on_crossing("OUT", track_id)
+                        except Exception:
+                            pass
 
     def sync_external_counts(self, counter_instance: Any):
         """Optional synchronization with Ultralytics ObjectCounter counts."""

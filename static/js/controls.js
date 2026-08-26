@@ -61,6 +61,15 @@ function applyLocalization() {
     setText('i18n_nerd_tracks', ui.nerd_tracks);
     setText('i18n_nerd_counts', ui.nerd_counts);
 
+    setText('i18n_db_badge', ui.db_synced || "💾 SQLite DB");
+    setText('i18n_history_title', ui.daily_history_title || "Daily Count History (SQLite)");
+    setText('th_date', ui.col_date || "Date");
+    setText('th_in', ui.col_in || "IN (Inbound)");
+    setText('th_out', ui.col_out || "OUT (Outbound)");
+    setText('th_net', ui.col_net || "Net Total");
+    setText('th_updated', ui.col_updated || "Last Updated");
+    setText('btnRefreshHistory', ui.btn_refresh || "↻ Refresh");
+
     setHtml('i18n_shortcuts', ui.shortcuts);
 }
 
@@ -325,12 +334,54 @@ async function controlRestart() {
     fetchStatus();
 }
 
+async function fetchDailyHistory() {
+    try {
+        const res = await fetch('/api/counts/history?limit=14');
+        if (!res.ok) return;
+        const data = await res.json();
+        const tbody = document.getElementById('historyTableBody');
+        const countBadge = document.getElementById('historyCountBadge');
+        const ui = currentLocaleData ? currentLocaleData.ui : null;
+        
+        if (!tbody) return;
+        
+        if (countBadge && data.total !== undefined) {
+            countBadge.innerText = `${data.total} ${data.total === 1 ? 'record' : 'records'}`;
+        }
+        
+        if (!data.history || data.history.length === 0) {
+            const noRecText = ui ? ui.no_records : "No daily records saved yet";
+            tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-500 font-sans">${noRecText}</td></tr>`;
+            return;
+        }
+        
+        tbody.innerHTML = data.history.map(row => {
+            const updatedTime = row.updated_at ? row.updated_at.replace('T', ' ').substring(0, 19) : '-';
+            const netSign = row.net_count > 0 ? '+' : '';
+            const netColor = row.net_count >= 0 ? 'text-blue-400' : 'text-rose-400';
+            
+            return `
+                <tr class="hover:bg-slate-700/40 transition-colors">
+                    <td class="py-3 px-4 font-bold text-slate-200">${row.date}</td>
+                    <td class="py-3 px-4 text-emerald-400 font-semibold">${row.in_count}</td>
+                    <td class="py-3 px-4 text-amber-400 font-semibold">${row.out_count}</td>
+                    <td class="py-3 px-4 ${netColor} font-bold">${netSign}${row.net_count}</td>
+                    <td class="py-3 px-4 text-slate-400 text-[11px]">${updatedTime}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error("Error fetching daily history:", e);
+    }
+}
+
 async function controlResetAll() {
     const ui = currentLocaleData ? currentLocaleData.ui : null;
     const msg = ui && ui.reset_confirm ? ui.reset_confirm : "Reset detector counts and restart video from beginning?";
     if (confirm(msg)) {
         await fetch('/api/playback/reset', { method: 'POST' });
         fetchStatus();
+        fetchDailyHistory();
     }
 }
 
@@ -394,5 +445,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     setInterval(fetchStatus, 300);
+    setInterval(fetchDailyHistory, 4000);
     fetchStatus();
+    fetchDailyHistory();
 });

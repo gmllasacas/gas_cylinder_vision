@@ -56,6 +56,8 @@ class YOLODetector:
                 region=self.line_points,
                 model=self.active_model_path
             )
+            if hasattr(self.counter, "LOGGER") and self.counter.LOGGER is not None:
+                self.counter.LOGGER.setLevel(40)  # logging.ERROR
             if hasattr(self.counter, "model") and hasattr(self.counter.model, "overrides"):
                 self.counter.model.overrides["conf"] = self.confidence
                 self.counter.model.overrides["imgsz"] = self.imgsz

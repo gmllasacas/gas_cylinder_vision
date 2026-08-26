@@ -40,6 +40,8 @@ class AppSettings(BaseModel):
     # Resolved Directory Paths
     root_dir: str = str(ROOT_DIR)
     app_dir: str = str(APP_DIR)
+    data_dir: str = str(ROOT_DIR / "data")
+    db_path: str = str(ROOT_DIR / "data" / "gas_stream.db")
     videos_dir: str = str(ROOT_DIR / "videos")
     models_dir: str = str(ROOT_DIR / "models")
     locales_dir: str = str(ROOT_DIR / "locales")

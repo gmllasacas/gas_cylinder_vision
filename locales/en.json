@@ -34,7 +34,16 @@
     "nerd_tracks": "Active Tracks:",
     "nerd_counts": "Cylinder Counts:",
     "shortcuts": "Shortcuts: <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">Space</span> Play/Pause &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">&larr;</span> / <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">&rarr;</span> &plusmn;5s &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">[</span> / <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">]</span> &plusmn;1 Frame &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">R</span> Restart &bull; <span class=\"bg-slate-700 px-1.5 py-0.5 rounded border border-slate-600\">N</span> Stats",
-    "reset_confirm": "Reset detector counts and restart video from beginning?"
+    "reset_confirm": "Reset detector counts and restart video from beginning?",
+    "daily_history_title": "Daily Count History (SQLite)",
+    "col_date": "Date",
+    "col_in": "IN (Inbound)",
+    "col_out": "OUT (Outbound)",
+    "col_net": "Net Total",
+    "col_updated": "Last Updated",
+    "db_synced": "💾 SQLite Synced",
+    "no_records": "No daily records saved yet",
+    "btn_refresh": "↻ Refresh"
   },
   "video": {
     "out_text": "^ OUT (Above)",

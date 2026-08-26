@@ -53,7 +53,12 @@
                 <p class="text-slate-400 text-xs sm:text-sm mt-1" id="i18n_subtitle">Going Below = <span class="text-emerald-400 font-semibold">IN (Down)</span> | Going Above = <span class="text-amber-400 font-semibold">OUT (Up)</span></p>
             </div>
             
-            <div class="flex items-center gap-3 shrink-0">
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                <!-- SQLite DB Badge -->
+                <span class="bg-indigo-950 border border-indigo-500/60 text-indigo-300 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm flex items-center gap-1.5" id="dbStatusBadge">
+                    <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                    <span id="i18n_db_badge">SQLite DB</span>
+                </span>
                 <!-- Status Badge -->
                 <span class="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm" id="statusBadge">PLAYING</span>
             </div>
@@ -200,8 +205,44 @@
                 </div>
             </div>
         </div>
+
+        <!-- Daily History Card (SQLite Persistent Records) -->
+        <div class="mt-6 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/90">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-base font-bold text-slate-100 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3V7c0-2-1.5-3-3.5-3h-9C5.5 4 4 5 4 7zm0 5h16M4 12c0 2 1.5 3 3.5 3h9c2 0 3.5-1 3.5-3M4 7c0-2 1.5-3 3.5-3h9c2 0 3.5 1 3.5 3"></path>
+                        </svg>
+                        <span id="i18n_history_title">Daily Count History (SQLite)</span>
+                    </span>
+                    <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono font-semibold" id="historyCountBadge">0 records</span>
+                </div>
+                <button onclick="fetchDailyHistory()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all active:translate-y-0.5 cursor-pointer shadow-sm" id="btnRefreshHistory">
+                    ↻ Refresh
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-700/80 bg-slate-900/70 text-xs uppercase font-semibold text-slate-400">
+                            <th class="py-3 px-4" id="th_date">Date</th>
+                            <th class="py-3 px-4 text-emerald-400" id="th_in">IN (Inbound)</th>
+                            <th class="py-3 px-4 text-amber-400" id="th_out">OUT (Outbound)</th>
+                            <th class="py-3 px-4 text-blue-400" id="th_net">Net Total</th>
+                            <th class="py-3 px-4 text-slate-400" id="th_updated">Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody" class="divide-y divide-slate-700/50 font-mono text-xs">
+                        <tr>
+                            <td colspan="5" class="py-6 text-center text-slate-500 font-sans" id="historyEmptyMsg">Loading SQLite records...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/js/controls.js?v=2.2"></script>
+    <script src="/static/js/controls.js?v=2.3"></script>
 </body>
 </html>
