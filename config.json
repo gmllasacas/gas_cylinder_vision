@@ -1,7 +1,7 @@
 {
   "source": {
     "type": "video",
-    "video_file": "1min_test.mp4",
+    "video_file": "test_2_in_3_out_2.mp4",
     "camera_url": "rtsp://admin:password@192.168.1.100:554/stream1",
     "camera_name": "IP Camera",
     "reconnect_interval_sec": 3
@@ -21,5 +21,10 @@
   "streaming": {
     "output_width": 1024,
     "jpeg_quality": 70
+  },
+  "anomaly": {
+    "enabled": true,
+    "window_seconds": 60,
+    "batch_idle_seconds": 15
   }
 }

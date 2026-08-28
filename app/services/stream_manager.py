@@ -4,6 +4,7 @@ import threading
 from typing import Optional, List, Dict, Any
 from app.core import settings, logger, i18n
 from app.db import db_repo
+from app.services.anomaly_detector import AnomalyDetector
 from app.cv import (
     VideoCaptureManager,
     YOLODetector,
@@ -67,7 +68,15 @@ class VideoStreamService:
             debug_mode=True
         )
 
-        # 2. Source Configuration
+        # 2. Anomaly & Inconsistency Detection Engine
+        self.anomaly_detector = AnomalyDetector(
+            enabled=self.settings.anomaly.enabled,
+            window_seconds=self.settings.anomaly.window_seconds,
+            batch_idle_seconds=self.settings.anomaly.batch_idle_seconds,
+            db=self.db
+        )
+
+        # 3. Source Configuration
         self.current_source_id = ""
         self.current_video_name = ""
         self.is_paused = False
@@ -79,7 +88,7 @@ class VideoStreamService:
         # Initialize Source from Settings
         self._init_source_from_settings()
 
-        # 3. Dedicated Background Worker Thread
+        # 4. Dedicated Background Worker Thread
         self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker_thread.start()
 
@@ -96,6 +105,11 @@ class VideoStreamService:
 
         self._connect_source(target_path)
 
+    def _get_current_stream_time(self) -> float:
+        if not self.capture.is_live_stream and not self.capture.is_file_missing and self.capture.video_fps > 0:
+            return float(self.capture.current_frame) / float(self.capture.video_fps)
+        return time.time()
+
     def _emit_standby_frame(self):
         standby_canvas = self.renderer.generate_standby_canvas(
             source_path=self.capture.current_source_path,
@@ -110,7 +124,8 @@ class VideoStreamService:
     def _connect_source(self, target_path: str) -> bool:
         success, initial_frame = self.capture.open(target_path)
         if success and initial_frame is not None:
-            self.pipeline.reset()
+            self.pipeline.reset(reset_counts=False)
+            self.anomaly_detector.reset()
             self.last_frame_bytes = self.pipeline.process_frame(initial_frame)
             self.new_frame_event.set()
             return True
@@ -207,6 +222,7 @@ class VideoStreamService:
         with self.lock:
             success, frame = self.capture.seek_frame(target_frame)
             if success and frame is not None:
+                self.anomaly_detector.reset()
                 self.last_frame_bytes = self.pipeline.process_frame(frame)
                 self.new_frame_event.set()
 
@@ -214,6 +230,7 @@ class VideoStreamService:
         with self.lock:
             success, frame = self.capture.seek_offset(seconds_offset)
             if success and frame is not None:
+                self.anomaly_detector.reset()
                 self.last_frame_bytes = self.pipeline.process_frame(frame)
                 self.new_frame_event.set()
 
@@ -228,18 +245,27 @@ class VideoStreamService:
         """Callback invoked whenever an object crosses the detection line."""
         try:
             cur_frame = self.capture.current_frame if hasattr(self, 'capture') else 0
+            cur_time = self._get_current_stream_time()
             self.db.record_crossing(
                 direction=direction,
                 track_id=track_id,
                 source_id=self.current_source_id,
                 frame_number=cur_frame
             )
+            # Evaluate anomaly & batch consistency with synchronized stream time
+            self.anomaly_detector.record_event(
+                direction=direction,
+                track_id=track_id,
+                timestamp=cur_time,
+                source_id=self.current_source_id
+            )
         except Exception as e:
             logger.error(f"Error persisting line crossing event: {e}")
 
     def reset(self, reset_db: bool = True):
         with self.lock:
-            self.pipeline.reset()
+            self.pipeline.reset(reset_counts=reset_db)
+            self.anomaly_detector.reset()
             if reset_db:
                 try:
                     self.db.reset_daily_count()
@@ -299,7 +325,9 @@ class VideoStreamService:
                 "in_count": self.counter.in_count,
                 "out_count": self.counter.out_count,
                 "net_count": self.counter.in_count - self.counter.out_count,
-                "active_tracks": self.counter.active_tracks_count
+                "active_tracks": self.counter.active_tracks_count,
+                "active_alerts_count": self.anomaly_detector.unread_alerts_count,
+                "latest_alert": self.anomaly_detector.latest_alert
             }
 
     def _worker_loop(self):
@@ -341,6 +369,10 @@ class VideoStreamService:
                         elif not self.capture.loop:
                             self.is_paused = True
 
+            # Periodic check for idle under-exit anomalies using synchronized stream time
+            cur_time = self._get_current_stream_time()
+            self.anomaly_detector.check_idle_timeout(current_time=cur_time, source_id=self.current_source_id)
+
             elapsed = time.time() - start_t
             sleep_time = max(0.001, target_delay - elapsed) if (
                 not self.is_paused and 
@@ -349,19 +381,16 @@ class VideoStreamService:
             ) else 0.4
             time.sleep(sleep_time)
 
-    def generate_frames(self):
-        """Yields multipart MJPEG frame chunks for HTTP StreamingResponse."""
-        last_sent = None
-        try:
-            while self.running:
-                frame_data = self.last_frame_bytes
-                if frame_data is not None and frame_data is not last_sent:
-                    last_sent = frame_data
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
-                time.sleep(0.015)
-        except (GeneratorExit, Exception):
-            pass
+    def stop(self):
+        """Stops the worker loop and releases video capture resources."""
+        self.running = False
+        self.new_frame_event.set()
+        if hasattr(self, 'capture'):
+            try:
+                self.capture.release()
+            except Exception:
+                pass
+        logger.info("VideoStreamService stopped.")
 
 # Singleton instance
 video_service = VideoStreamService()

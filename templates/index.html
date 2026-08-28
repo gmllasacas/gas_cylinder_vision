@@ -54,6 +54,11 @@
             </div>
             
             <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                <!-- Inconsistency Alerts Badge -->
+                <span class="hidden bg-rose-950 border border-rose-500/60 text-rose-300 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm items-center gap-1.5 cursor-pointer" id="alertsBadge" onclick="scrollToAlerts()">
+                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                    <span id="alertsBadgeText">⚠️ 0 Inconsistencies</span>
+                </span>
                 <!-- SQLite DB Badge -->
                 <span class="bg-indigo-950 border border-indigo-500/60 text-indigo-300 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm flex items-center gap-1.5" id="dbStatusBadge">
                     <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
@@ -241,8 +246,49 @@
                 </table>
             </div>
         </div>
+
+        <!-- Inconsistency & Anomaly Alerts History Card -->
+        <div class="mt-6 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-2xl" id="inconsistencyCard">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/90">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-base font-bold text-slate-100 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span id="i18n_alerts_title">Inconsistency &amp; Anomaly Alerts</span>
+                    </span>
+                    <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono font-semibold" id="alertsCountBadge">0 alerts</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="fetchAlerts()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all active:translate-y-0.5 cursor-pointer shadow-sm" id="btnRefreshAlerts">
+                        ↻ Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-700/80 bg-slate-900/70 text-xs uppercase font-semibold text-slate-400">
+                            <th class="py-3 px-4" id="th_alert_time">Time</th>
+                            <th class="py-3 px-4 text-emerald-400" id="th_alert_in">IN</th>
+                            <th class="py-3 px-4 text-amber-400" id="th_alert_out">OUT</th>
+                            <th class="py-3 px-4 text-rose-400" id="th_alert_disc">Discrepancy</th>
+                            <th class="py-3 px-4 text-slate-300" id="th_alert_details">Details / Inconsistency</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTableBody" class="divide-y divide-slate-700/50 font-mono text-xs">
+                        <tr>
+                            <td colspan="5" class="py-6 text-center text-slate-500 font-sans" id="alertsEmptyMsg">No inconsistencies detected yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/js/controls.js?v=2.3"></script>
+    <!-- Floating Toast Notification for Inconsistencies / Anomalies -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-3 max-w-sm pointer-events-none"></div>
+
+    <script src="/static/js/controls.js?v=2.7"></script>
 </body>
 </html>

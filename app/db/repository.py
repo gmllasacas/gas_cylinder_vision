@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import Optional, List, Dict, Any
 from app.core import logger
 from app.db.database import DatabaseManager
@@ -215,3 +215,69 @@ class DailyCountRepository:
             )
             return dict(cursor.fetchone())
 
+    def record_inconsistency(
+        self,
+        in_count: int,
+        out_count: int,
+        message: str,
+        severity: str = "WARNING",
+        source_id: Optional[str] = None,
+        target_date: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Logs an inconsistency/anomaly alert into SQLite."""
+        date_val = target_date or self._today_str()
+        now = self._now_iso()
+        discrepancy = out_count - in_count
+
+        with self.db.get_cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO inconsistency_alerts (timestamp, date, in_count, out_count, discrepancy, message, severity, source_id, acknowledged)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """,
+                (now, date_val, in_count, out_count, discrepancy, message, severity, source_id)
+            )
+            alert_id = cursor.lastrowid
+            cursor.execute(
+                "SELECT id, timestamp, date, in_count, out_count, discrepancy, message, severity, source_id, acknowledged FROM inconsistency_alerts WHERE id = ?",
+                (alert_id,)
+            )
+            created = dict(cursor.fetchone())
+            logger.warning(f"Inconsistency Alert logged [ID={alert_id}]: {message} (IN={in_count}, OUT={out_count})")
+            return created
+
+    def get_inconsistency_alerts(
+        self,
+        limit: int = 50,
+        target_date: Optional[str] = None,
+        unread_only: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Retrieves recent anomaly/inconsistency alerts."""
+        query = "SELECT id, timestamp, date, in_count, out_count, discrepancy, message, severity, source_id, acknowledged FROM inconsistency_alerts"
+        params: List[Any] = []
+        conditions = []
+
+        if target_date:
+            conditions.append("date = ?")
+            params.append(target_date)
+        if unread_only:
+            conditions.append("acknowledged = 0")
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(max(1, min(limit, 500)))
+
+        with self.db.get_cursor() as cursor:
+            cursor.execute(query, tuple(params))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def clear_inconsistency_alerts(self, target_date: Optional[str] = None) -> int:
+        """Clears or marks inconsistency alerts as acknowledged."""
+        with self.db.get_cursor() as cursor:
+            if target_date:
+                cursor.execute("DELETE FROM inconsistency_alerts WHERE date = ?", (target_date,))
+            else:
+                cursor.execute("DELETE FROM inconsistency_alerts")
+            return cursor.rowcount

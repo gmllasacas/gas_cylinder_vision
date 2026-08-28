@@ -1,4 +1,4 @@
-from app.schemas.status import StreamStatusResponse
+﻿from app.schemas.status import StreamStatusResponse
 from app.schemas.source import SourceItem, VideoSourcesResponse, SelectSourceResponse
 from app.schemas.playback import SeekRequest, StepRequest
 from app.schemas.settings import (
@@ -14,6 +14,10 @@ from app.schemas.counts import (
     CountEventItem,
     CountEventsResponse,
     ResetCountResponse,
+)
+from app.schemas.alerts import (
+    InconsistencyAlertResponse,
+    AlertListResponse,
 )
 
 __all__ = [
@@ -33,5 +37,6 @@ __all__ = [
     "CountEventItem",
     "CountEventsResponse",
     "ResetCountResponse",
+    "InconsistencyAlertResponse",
+    "AlertListResponse",
 ]
-

@@ -83,8 +83,8 @@ class CVPipeline:
 
         return frame_bytes
 
-    def reset(self):
-        """Resets detector cache, counter tracks, and timing buffers."""
+    def reset(self, reset_counts: bool = False):
+        """Resets detector cache, counter tracks, and timing buffers without wiping persistent counts by default."""
         self.detector.reset()
-        self.counter.reset()
+        self.counter.reset(reset_counts=reset_counts)
         self._fps_frame_times.clear()

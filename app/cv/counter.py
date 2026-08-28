@@ -16,6 +16,7 @@ class LineCrossingCounter:
         self.track_history: Dict[int, List[Tuple[int, int]]] = {}
         self.counted_in_ids: Set[int] = set()
         self.counted_out_ids: Set[int] = set()
+        self.tracks_inside_polygon: Set[int] = set()
 
     def set_counts(self, in_count: int = 0, out_count: int = 0):
         """Sets initial or synchronized count values."""
@@ -54,13 +55,64 @@ class LineCrossingCounter:
 
     def _check_crossing(self, track_id: int, cx: int, cy: int):
         """
-        Directional counting rule:
-        - Downwards (y increasing, going below line) = IN
-        - Upwards (y decreasing, going above line) = OUT
+        Evaluates counting rules:
+        - Polygon: Counts as IN when entering the area, and OUT when leaving the polygon.
+        - Line: Counts as IN from up to bottom, and OUT from bottom to up.
         """
         if len(self.line_points) < 2:
             return
 
+        history = self.track_history.get(track_id, [])
+
+        # 1. Square / Polygon Region Mode (3 or more points)
+        # Rules:
+        # - When object appears (is recognized) inside polygon: do NOT count yet, just register inside.
+        # - Crossing boundary going outside (leaving polygon): counts as IN ("going outside as in").
+        # - Crossing boundary going inside (entering polygon from outside): counts as OUT ("going inside as out").
+        if len(self.line_points) >= 3:
+            import cv2
+            import numpy as np
+
+            pts = np.array(self.line_points, dtype=np.int32)
+            curr_inside = cv2.pointPolygonTest(pts, (float(cx), float(cy)), False) >= 0
+
+            if curr_inside:
+                # If this is the very first frame the object is detected
+                if len(history) <= 1:
+                    # Object appears inside polygon -> register as inside, DO NOT count yet
+                    self.tracks_inside_polygon.add(track_id)
+                elif track_id not in self.tracks_inside_polygon:
+                    # Object was outside and now crossed boundary going inside -> counts as OUT
+                    self.tracks_inside_polygon.add(track_id)
+                    if track_id not in self.counted_out_ids:
+                        self.out_count += 1
+                        self.counted_out_ids.add(track_id)
+                        self.counted_in_ids.discard(track_id)
+                        if self.on_crossing:
+                            try:
+                                self.on_crossing("OUT", track_id)
+                            except Exception:
+                                pass
+            else:
+                # Object is outside polygon
+                if track_id in self.tracks_inside_polygon:
+                    # Object was inside and now crossed boundary going outside -> counts as IN
+                    self.tracks_inside_polygon.discard(track_id)
+                    if track_id not in self.counted_in_ids:
+                        self.in_count += 1
+                        self.counted_in_ids.add(track_id)
+                        self.counted_out_ids.discard(track_id)
+                        if self.on_crossing:
+                            try:
+                                self.on_crossing("IN", track_id)
+                            except Exception:
+                                pass
+            return
+
+        # 2. 2-Point Line Mode
+        if len(history) < 2:
+            return
+        prev_cx, prev_cy = history[-2]
         x1, y1 = self.line_points[0]
         x2, y2 = self.line_points[1]
 
@@ -72,33 +124,29 @@ class LineCrossingCounter:
         if not (min_x - 50 <= cx <= max_x + 50):
             return
 
-        history = self.track_history.get(track_id, [])
-        if len(history) >= 2:
-            prev_cx, prev_cy = history[-2]
+        # 1. From Up to Bottom (Top -> Bottom): previous was above line, current is at/below line
+        if prev_cy < line_y and cy >= line_y:
+            if track_id not in self.counted_in_ids:
+                self.in_count += 1
+                self.counted_in_ids.add(track_id)
+                self.counted_out_ids.discard(track_id)
+                if self.on_crossing:
+                    try:
+                        self.on_crossing("IN", track_id)
+                    except Exception:
+                        pass
 
-            # 1. Going Below (Top -> Bottom): previous was above line, current is at/below line
-            if prev_cy < line_y and cy >= line_y:
-                if track_id not in self.counted_in_ids:
-                    self.in_count += 1
-                    self.counted_in_ids.add(track_id)
-                    self.counted_out_ids.discard(track_id)
-                    if self.on_crossing:
-                        try:
-                            self.on_crossing("IN", track_id)
-                        except Exception:
-                            pass
-
-            # 2. Going Above (Bottom -> Top): previous was below line, current is at/above line
-            elif prev_cy > line_y and cy <= line_y:
-                if track_id not in self.counted_out_ids:
-                    self.out_count += 1
-                    self.counted_out_ids.add(track_id)
-                    self.counted_in_ids.discard(track_id)
-                    if self.on_crossing:
-                        try:
-                            self.on_crossing("OUT", track_id)
-                        except Exception:
-                            pass
+        # 2. From Bottom to Up (Bottom -> Top): previous was below line, current is at/above line
+        elif prev_cy > line_y and cy <= line_y:
+            if track_id not in self.counted_out_ids:
+                self.out_count += 1
+                self.counted_out_ids.add(track_id)
+                self.counted_in_ids.discard(track_id)
+                if self.on_crossing:
+                    try:
+                        self.on_crossing("OUT", track_id)
+                    except Exception:
+                        pass
 
     def sync_external_counts(self, counter_instance: Any):
         """Optional synchronization with Ultralytics ObjectCounter counts."""
@@ -123,11 +171,14 @@ class LineCrossingCounter:
                 if "OUT" in counts_obj:
                     self.out_count = int(counts_obj["OUT"])
 
-    def reset(self):
-        """Resets all track histories and counter values."""
-        self.in_count = 0
-        self.out_count = 0
+    def reset(self, reset_counts: bool = True):
+        """Resets track histories and optionally counter totals."""
+        if reset_counts:
+            self.in_count = 0
+            self.out_count = 0
         self.active_tracks_count = 0
         self.track_history.clear()
         self.counted_in_ids.clear()
         self.counted_out_ids.clear()
+        if hasattr(self, 'tracks_inside_polygon'):
+            self.tracks_inside_polygon.clear()

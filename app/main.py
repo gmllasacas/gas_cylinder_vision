@@ -1,16 +1,27 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.core import settings, logger
 from app.api import api_router
+from app.services.stream_manager import video_service
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Handles application startup and graceful shutdown."""
+    logger.info("FastAPI Application startup completed.")
+    yield
+    logger.info("FastAPI Application shutting down...")
+    video_service.stop()
 
 def create_app() -> FastAPI:
     """Factory creating and configuring the main FastAPI application."""
     application = FastAPI(
         title=settings.app_name,
         description="Real-time Computer Vision Gas Tank Counter & Video Inspection Dashboard",
-        version="1.0.0"
+        version="1.0.0",
+        lifespan=lifespan
     )
 
     # Ensure static/locales directories exist

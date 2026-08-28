@@ -1,54 +1,51 @@
+﻿import sqlite3
 import os
-import sqlite3
-import threading
+from pathlib import Path
 from contextlib import contextmanager
 from typing import Generator
 from app.core import settings, logger
 
 class DatabaseManager:
-    """Thread-safe SQLite Database Manager for gas_stream."""
+    """Manages SQLite database connections and table initialization."""
 
-    def __init__(self, db_path: str = settings.db_path):
-        self.db_path = db_path
-        self._lock = threading.Lock()
-        
-        # Ensure database directory exists
-        db_dir = os.path.dirname(os.path.abspath(self.db_path))
+    def __init__(self, db_path: str = None):
+        self.db_path = db_path or settings.db_path
+        db_dir = os.path.dirname(self.db_path)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
-            
         self.init_db()
 
     def get_connection(self) -> sqlite3.Connection:
-        """Returns a configured SQLite connection with WAL mode enabled."""
+        """Creates and configures a new SQLite connection with WAL mode and row factory."""
         conn = sqlite3.connect(
             self.db_path,
-            check_same_thread=False,
-            timeout=30.0
+            timeout=10.0,
+            check_same_thread=False
         )
         conn.row_factory = sqlite3.Row
-        # Enable WAL mode and foreign keys for high concurrent throughput
-        conn.execute("PRAGMA journal_mode = WAL;")
-        conn.execute("PRAGMA synchronous = NORMAL;")
-        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA foreign_keys=ON;")
         return conn
 
     @contextmanager
     def get_cursor(self) -> Generator[sqlite3.Cursor, None, None]:
-        """Thread-safe context manager providing a transactional cursor."""
-        with self._lock:
-            conn = self.get_connection()
-            cursor = conn.cursor()
+        """Context manager providing thread-safe transaction execution and auto-commit/rollback."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            yield cursor
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Database error during transaction: {e}")
+            raise e
+        finally:
             try:
-                yield cursor
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                logger.error(f"Database error during transaction: {e}")
-                raise
-            finally:
                 cursor.close()
                 conn.close()
+            except Exception:
+                pass
 
     def init_db(self):
         """Initializes database schema if tables do not exist."""
@@ -81,5 +78,25 @@ class DatabaseManager:
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_count_events_date ON count_events(date);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_count_events_timestamp ON count_events(timestamp);")
+
+            # Table: inconsistency_alerts (discrepancy & anomaly notifications)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS inconsistency_alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    in_count INTEGER NOT NULL,
+                    out_count INTEGER NOT NULL,
+                    discrepancy INTEGER NOT NULL,
+                    message TEXT NOT NULL,
+                    severity TEXT NOT NULL DEFAULT 'WARNING',
+                    source_id TEXT,
+                    acknowledged INTEGER NOT NULL DEFAULT 0
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inconsistency_date ON inconsistency_alerts(date);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inconsistency_timestamp ON inconsistency_alerts(timestamp);")
             logger.info(f"Database initialized successfully at {self.db_path}")
 
+# Global database manager singleton
+db_manager = DatabaseManager()

@@ -1,3 +1,4 @@
+﻿from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 class StreamStatusResponse(BaseModel):
@@ -36,3 +37,5 @@ class StreamStatusResponse(BaseModel):
     out_count: int = Field(..., description="Total count of cylinders going Above (OUT)")
     net_count: int = Field(..., description="Net daily total (IN - OUT)")
     active_tracks: int = Field(..., description="Count of currently tracked objects in view")
+    active_alerts_count: int = Field(default=0, description="Count of active unread anomaly/inconsistency alerts")
+    latest_alert: Optional[Dict[str, Any]] = Field(default=None, description="Most recent anomaly alert object if any")

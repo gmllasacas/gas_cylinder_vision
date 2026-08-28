@@ -79,8 +79,24 @@ class FrameRenderer:
         out_text = self.i18n.t("video.out_text", "^ OUT (Above)")
         in_text = self.i18n.t("video.in_text", "v IN (Below)")
 
-        # 1. Draw Counting Line
-        if len(self.line_points) >= 2:
+        # 1. Draw Counting Line or Polygon Region
+        if len(self.line_points) >= 3:
+            pts = np.array(self.line_points, dtype=np.int32).reshape((-1, 1, 2))
+            # Semi-transparent zone overlay
+            overlay = annotated.copy()
+            cv2.fillPoly(overlay, [pts], (0, 255, 255))
+            cv2.addWeighted(overlay, 0.12, annotated, 0.88, 0, annotated)
+            # Outline
+            cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+
+            min_y = int(np.min(pts[:, 0, 1]))
+            max_y = int(np.max(pts[:, 0, 1]))
+            mid_x = int(np.mean(pts[:, 0, 0]))
+
+            cv2.putText(annotated, out_text, (mid_x - 85, max(20, min_y - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2, cv2.LINE_AA)
+            cv2.putText(annotated, in_text, (mid_x - 85, max_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+
+        elif len(self.line_points) == 2:
             pt1 = tuple(self.line_points[0])
             pt2 = tuple(self.line_points[1])
             cv2.line(annotated, pt1, pt2, (0, 255, 255), 3, cv2.LINE_AA)
