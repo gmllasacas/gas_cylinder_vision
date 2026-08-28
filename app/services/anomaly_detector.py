@@ -1,4 +1,4 @@
-﻿import time
+import time
 from typing import Optional, List, Dict, Any, Callable
 from app.core import logger, i18n as global_i18n, I18nManager
 from app.db import db_repo, DailyCountRepository
@@ -39,7 +39,34 @@ class AnomalyDetector:
         self.last_in_time: float = 0.0
         self.last_out_time: float = 0.0
         self.latest_alert: Optional[Dict[str, Any]] = None
-        self.unread_alerts_count: int = 0
+        self.today_date: str = self.db._today_str()
+        self._today_alerts_count: int = 0
+
+        # Initialize count from today's persistent records
+        self.sync_today_alerts()
+
+    def _check_date_rollover(self):
+        cur_today = self.db._today_str()
+        if cur_today != self.today_date:
+            self.today_date = cur_today
+            self._today_alerts_count = 0
+            self.latest_alert = None
+            self._reset_batch()
+
+    @property
+    def unread_alerts_count(self) -> int:
+        self._check_date_rollover()
+        return self._today_alerts_count
+
+    def sync_today_alerts(self):
+        """Synchronizes in-memory alert count with today's database records."""
+        self.today_date = self.db._today_str()
+        try:
+            today_alerts = self.db.get_inconsistency_alerts(target_date=self.today_date, limit=100)
+            self._today_alerts_count = len(today_alerts)
+            self.latest_alert = today_alerts[0] if today_alerts else None
+        except Exception as e:
+            logger.warning(f"Error syncing alerts count: {e}")
 
     def set_config(self, enabled: bool, window_seconds: float, batch_idle_seconds: float):
         self.enabled = enabled
@@ -226,6 +253,7 @@ class AnomalyDetector:
         severity: str = "WARNING",
         source_id: Optional[str] = None
     ) -> Dict[str, Any]:
+        self._check_date_rollover()
         alert_data = self.db.record_inconsistency(
             in_count=in_count,
             out_count=out_count,
@@ -234,7 +262,7 @@ class AnomalyDetector:
             source_id=source_id
         )
         self.latest_alert = alert_data
-        self.unread_alerts_count += 1
+        self._today_alerts_count += 1
 
         if self.on_alert:
             try:
@@ -244,10 +272,13 @@ class AnomalyDetector:
 
         return alert_data
 
-    def clear_alerts(self):
+    def clear_alerts(self, target_date: Optional[str] = None):
         self.latest_alert = None
-        self.unread_alerts_count = 0
+        self._today_alerts_count = 0
         self._reset_batch()
+        self.db.clear_inconsistency_alerts(target_date=target_date)
 
-    def reset(self):
-        self.clear_alerts()
+    def reset(self, reset_alerts: bool = False):
+        self._reset_batch()
+        if reset_alerts:
+            self.clear_alerts()

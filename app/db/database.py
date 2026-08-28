@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import os
 from pathlib import Path
 from contextlib import contextmanager
@@ -97,6 +97,3 @@ class DatabaseManager:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_inconsistency_date ON inconsistency_alerts(date);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_inconsistency_timestamp ON inconsistency_alerts(timestamp);")
             logger.info(f"Database initialized successfully at {self.db_path}")
-
-# Global database manager singleton
-db_manager = DatabaseManager()

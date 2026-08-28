@@ -295,6 +295,17 @@ class VideoStreamService:
             current_time = (cur_frame / vid_fps) if (not self.capture.is_live_stream and not self.capture.is_file_missing and vid_fps > 0) else 0.0
             duration = (tot_frames / vid_fps) if (not self.capture.is_live_stream and not self.capture.is_file_missing and vid_fps > 0) else 0.0
 
+            # Authoritative daily counts from SQLite DB
+            try:
+                today_record = self.db.get_or_create_daily()
+                db_in = today_record.get("in_count", self.counter.in_count)
+                db_out = today_record.get("out_count", self.counter.out_count)
+                db_net = today_record.get("net_count", db_in - db_out)
+            except Exception:
+                db_in = self.counter.in_count
+                db_out = self.counter.out_count
+                db_net = self.counter.in_count - self.counter.out_count
+
             return {
                 "current_video": self.current_video_name,
                 "current_source_id": self.current_source_id,
@@ -322,9 +333,9 @@ class VideoStreamService:
                 "duration": round(duration, 2),
                 "is_paused": self.is_paused,
                 "loop": self.capture.loop,
-                "in_count": self.counter.in_count,
-                "out_count": self.counter.out_count,
-                "net_count": self.counter.in_count - self.counter.out_count,
+                "in_count": db_in,
+                "out_count": db_out,
+                "net_count": db_net,
                 "active_tracks": self.counter.active_tracks_count,
                 "active_alerts_count": self.anomaly_detector.unread_alerts_count,
                 "latest_alert": self.anomaly_detector.latest_alert

@@ -2,55 +2,137 @@ let isUserDragging = false;
 let isConfDragging = false;
 let currentLang = 'es';
 let currentLocaleData = null;
-let lastSeenAlertId = 0;
+let lastSeenAlertId = -1;
 let audioCtx = null;
+let alertsMap = {};
+let historyTotal = 0;
+let alertsTotal = 0;
+
+let notificationAudio = null;
+
+function initNotificationAudio() {
+    if (!notificationAudio) {
+        try {
+            notificationAudio = new Audio('/static/audio/alert.wav');
+            notificationAudio.volume = 1.0;
+            notificationAudio.preload = 'auto';
+        } catch (e) {
+            console.warn("Could not create Audio element:", e);
+        }
+    }
+}
 
 function initAudioContext() {
     if (!audioCtx) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext) {
-            audioCtx = new AudioContext();
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
         }
     }
     if (audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
+    return audioCtx;
+}
+
+// Ensure Web Audio and HTML5 audio are unlocked on first user interaction anywhere
+['click', 'keydown', 'touchstart', 'mousedown'].forEach(evt => {
+    document.addEventListener(evt, () => {
+        initAudioContext();
+        initNotificationAudio();
+    }, { passive: true });
+});
+
+function playWebAudioChime() {
+    try {
+        const ctx = initAudioContext();
+        if (!ctx) return;
+
+        const now = ctx.currentTime;
+        const masterGain = ctx.createGain();
+        masterGain.gain.setValueAtTime(0.95, now);
+        masterGain.connect(ctx.destination);
+
+        const strikes = [
+            { freq: 1046.50, time: 0.00, dur: 0.45, gain: 0.70 }, // C6
+            { freq: 1318.51, time: 0.16, dur: 0.50, gain: 0.80 }, // E6
+            { freq: 2093.00, time: 0.32, dur: 0.90, gain: 1.00 }  // High C7 (crystal peak)
+        ];
+
+        strikes.forEach(({ freq, time, dur, gain }) => {
+            const osc = ctx.createOscillator();
+            const gNode = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + time);
+            gNode.gain.setValueAtTime(0.0, now + time);
+            gNode.gain.setValueAtTime(gain * 0.75, now + time + 0.003);
+            gNode.gain.exponentialRampToValueAtTime(0.001, now + time + dur);
+            osc.connect(gNode);
+            gNode.connect(masterGain);
+            osc.start(now + time);
+            osc.stop(now + time + dur);
+
+            // Resonant octave harmonic
+            const oscHarm = ctx.createOscillator();
+            const gHarm = ctx.createGain();
+            oscHarm.type = 'sine';
+            oscHarm.frequency.setValueAtTime(freq * 2.0, now + time);
+            gHarm.gain.setValueAtTime(0.0, now + time);
+            gHarm.gain.setValueAtTime(gain * 0.25, now + time + 0.003);
+            gHarm.gain.exponentialRampToValueAtTime(0.001, now + time + (dur * 0.6));
+            oscHarm.connect(gHarm);
+            gHarm.connect(masterGain);
+            oscHarm.start(now + time);
+            oscHarm.stop(now + time + (dur * 0.6));
+        });
+    } catch (e) {
+        console.warn("Web Audio fallback error:", e);
+    }
 }
 
 function playNotificationSound() {
     try {
-        initAudioContext();
-        if (!audioCtx) return;
-
-        const now = audioCtx.currentTime;
-        
-        // Tone 1: High crisp chime (880 Hz - A5 ramping to 1174.66 Hz - D6)
-        const osc1 = audioCtx.createOscillator();
-        const gain1 = audioCtx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(880, now);
-        osc1.frequency.exponentialRampToValueAtTime(1174.66, now + 0.12);
-        gain1.gain.setValueAtTime(0.25, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-        osc1.connect(gain1);
-        gain1.connect(audioCtx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.35);
-
-        // Tone 2: Secondary harmonic accent (1318.51 Hz - E6)
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(1318.51, now + 0.12);
-        gain2.gain.setValueAtTime(0.0, now);
-        gain2.gain.setValueAtTime(0.22, now + 0.12);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-        osc2.connect(gain2);
-        gain2.connect(audioCtx.destination);
-        osc2.start(now + 0.12);
-        osc2.stop(now + 0.55);
+        initNotificationAudio();
+        if (notificationAudio) {
+            notificationAudio.currentTime = 0;
+            const playPromise = notificationAudio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    playWebAudioChime();
+                });
+            }
+        } else {
+            playWebAudioChime();
+        }
     } catch (e) {
-        console.warn("Audio notification chime could not be played:", e);
+        playWebAudioChime();
+    }
+}
+
+function formatTime12h(isoString) {
+    if (!isoString) return '-';
+    try {
+        let timePart = '';
+        if (isoString.includes('T')) {
+            timePart = isoString.split('T')[1].substring(0, 8);
+        } else if (isoString.includes(' ')) {
+            timePart = isoString.split(' ')[1].substring(0, 8);
+        } else {
+            timePart = isoString.substring(0, 8);
+        }
+        const parts = timePart.split(':');
+        if (parts.length >= 2) {
+            let h = parseInt(parts[0], 10);
+            const m = parts[1] || '00';
+            const s = parts[2] ? parts[2].substring(0, 2) : '00';
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            const hh = String(h).padStart(2, '0');
+            return `${hh}:${m}:${s} ${ampm}`;
+        }
+        return isoString;
+    } catch (e) {
+        return isoString;
     }
 }
 
@@ -62,7 +144,7 @@ function formatTime(seconds) {
 
 async function loadLocale(lang) {
     try {
-        const res = await fetch(`/locales/${lang}.json?v=2.3`);
+        const res = await fetch(`/locales/${lang}.json?v=2.9`);
         if (res.ok) {
             currentLocaleData = await res.json();
             currentLang = lang;
@@ -92,8 +174,25 @@ function applyLocalization() {
     setText('i18n_title', ui.title);
     setHtml('i18n_subtitle', ui.subtitle);
     setText('i18n_kpi_in', ui.kpi_in);
+    setText('i18n_kpi_badge_in', ui.kpi_badge_in || "↓ IN");
+    setText('i18n_kpi_in_sub', ui.kpi_in_sub);
     setText('i18n_kpi_out', ui.kpi_out);
+    setText('i18n_kpi_badge_out', ui.kpi_badge_out || "↑ OUT");
+    setText('i18n_kpi_out_sub', ui.kpi_out_sub);
     setText('i18n_kpi_net', ui.kpi_net);
+    setText('i18n_kpi_badge_net', ui.kpi_badge_net || "± NET");
+    setText('i18n_kpi_net_sub', ui.kpi_net_sub);
+    setText('i18n_kpi_alerts', ui.kpi_alerts || "Inconsistencies");
+    setText('i18n_kpi_badge_alerts', ui.kpi_badge_alerts || "⚠️ ALERTS");
+    setText('i18n_kpi_alerts_sub', ui.kpi_alerts_sub || "Flagged Today");
+
+    setText('i18n_telemetry_title', ui.telemetry_title || "AI & System Telemetry");
+    setText('i18n_telemetry_online', ui.telemetry_online || "ONLINE");
+    setText('i18n_telemetry_fps', ui.telemetry_fps || "Processing FPS");
+    setText('i18n_telemetry_latency', ui.telemetry_latency || "AI Latency");
+    setText('i18n_telemetry_model', ui.telemetry_model || "Active Model");
+    setText('i18n_telemetry_tracks', ui.telemetry_tracks || "Objects in View");
+
     setText('i18n_conf', ui.conf);
     setText('i18n_speed', ui.speed);
     setText('btnRestart', ui.btn_restart);
@@ -113,22 +212,39 @@ function applyLocalization() {
     setText('i18n_nerd_tracks', ui.nerd_tracks);
     setText('i18n_nerd_counts', ui.nerd_counts);
 
-    setText('i18n_db_badge', ui.db_synced || "💾 SQLite DB");
-    setText('i18n_history_title', ui.daily_history_title || "Daily Count History (SQLite)");
+    setText('i18n_history_title', ui.daily_history_title || "Daily Count History");
     setText('th_date', ui.col_date || "Date");
     setText('th_in', ui.col_in || "IN (Inbound)");
     setText('th_out', ui.col_out || "OUT (Outbound)");
     setText('th_net', ui.col_net || "Net Total");
     setText('th_updated', ui.col_updated || "Last Updated");
-    setText('btnRefreshHistory', ui.btn_refresh || "↻ Refresh");
 
     setText('i18n_alerts_title', ui.alerts_title || "Inconsistency & Anomaly Alerts");
     setText('th_alert_time', ui.th_alert_time || "Time");
     setText('th_alert_in', ui.th_alert_in || "IN");
     setText('th_alert_out', ui.th_alert_out || "OUT");
-    setText('th_alert_disc', ui.th_alert_disc || "Discrepancy");
-    setText('th_alert_details', ui.th_alert_details || "Details / Inconsistency");
-    setText('btnRefreshAlerts', ui.btn_refresh || "↻ Refresh");
+    setText('th_alert_disc', ui.th_alert_disc || "Diff");
+    setText('th_alert_action', ui.th_alert_action || "Action");
+
+    // Modal Localization
+    setText('modalAlertTitle', ui.modal_alert_title || "Inconsistency Details");
+    setText('modalLabelIn', ui.modal_in || "IN");
+    setText('modalLabelOut', ui.modal_out || "OUT");
+    setText('modalLabelDiff', ui.modal_diff || "Diff");
+    setText('modalLabelMessage', ui.modal_message || "Description");
+    setText('btnModalClose', ui.modal_close || "Close");
+
+    // Dynamic Table Badges Localization (N records / N registros)
+    const histBadge = document.getElementById('historyCountBadge');
+    if (histBadge) {
+        const label = historyTotal === 1 ? (ui.record || 'record') : (ui.records || 'records');
+        histBadge.innerText = `${historyTotal} ${label}`;
+    }
+    const alertBadge = document.getElementById('alertsCountBadge');
+    if (alertBadge) {
+        const label = alertsTotal === 1 ? (ui.record || 'record') : (ui.records || 'records');
+        alertBadge.innerText = `${alertsTotal} ${label}`;
+    }
 
     setHtml('i18n_shortcuts', ui.shortcuts);
 }
@@ -207,19 +323,24 @@ async function fetchStatus() {
         const netEl = document.getElementById('netCount');
         if (inEl && data.in_count !== undefined) inEl.innerText = data.in_count;
         if (outEl && data.out_count !== undefined) outEl.innerText = data.out_count;
-        if (netEl && data.net_count !== undefined) netEl.innerText = data.net_count;
+        if (netEl && data.net_count !== undefined) netEl.innerText = (data.net_count > 0 ? `+${data.net_count}` : data.net_count);
 
-        // Update Anomaly / Inconsistency Alerts Badge & Toast Notification
+        // Update Bento Alerts KPI & Badge
+        const alertsKpiCount = document.getElementById('alertsKpiCount');
         const alertsBadge = document.getElementById('alertsBadge');
         const alertsBadgeText = document.getElementById('alertsBadgeText');
-        if (data.active_alerts_count !== undefined && data.active_alerts_count > 0) {
+        const activeAlerts = data.active_alerts_count !== undefined ? data.active_alerts_count : 0;
+        
+        if (alertsKpiCount) alertsKpiCount.innerText = activeAlerts;
+
+        if (activeAlerts > 0) {
             if (alertsBadge) {
                 alertsBadge.classList.remove('hidden');
                 alertsBadge.classList.add('flex');
             }
             if (alertsBadgeText) {
-                const label = data.active_alerts_count === 1 ? (ui && ui.alert_singular ? ui.alert_singular : 'inconsistency') : (ui && ui.alert_plural ? ui.alert_plural : 'inconsistencies');
-                alertsBadgeText.innerText = `⚠️ ${data.active_alerts_count} ${label}`;
+                const label = activeAlerts === 1 ? (ui && ui.alert_singular ? ui.alert_singular : 'inconsistency') : (ui && ui.alert_plural ? ui.alert_plural : 'inconsistencies');
+                alertsBadgeText.innerText = `⚠️ ${activeAlerts} ${label}`;
             }
         } else {
             if (alertsBadge) {
@@ -228,13 +349,41 @@ async function fetchStatus() {
             }
         }
 
-        if (data.latest_alert && data.latest_alert.id && data.latest_alert.id > lastSeenAlertId) {
-            lastSeenAlertId = data.latest_alert.id;
-            showToastAlert(data.latest_alert);
-            fetchAlerts();
+        // Update Live Telemetry Bento Widget
+        const telFps = document.getElementById('telemetryFps');
+        const telLat = document.getElementById('telemetryLatency');
+        const telMod = document.getElementById('telemetryModel');
+        const telTrk = document.getElementById('telemetryTracks');
+
+        if (telFps && typeof data.actual_stream_fps === 'number') {
+            telFps.innerText = data.actual_stream_fps.toFixed(1);
+        }
+        if (telLat && data.ai_latency_ms !== undefined) {
+            telLat.innerText = `${data.ai_latency_ms} ms`;
+        }
+        if (telMod && data.active_model) {
+            telMod.innerText = data.active_model;
+        }
+        if (telTrk && data.active_tracks !== undefined) {
+            telTrk.innerText = data.active_tracks;
         }
 
-        // Toggle HUD and Update Button based on data.debug_mode
+        // Toast on new alert (only for new events occurring in real-time)
+        if (data.latest_alert && data.latest_alert.id) {
+            if (lastSeenAlertId === -1) {
+                // Initial page load: sync baseline without showing popup toast or chime
+                lastSeenAlertId = data.latest_alert.id;
+            } else if (data.latest_alert.id > lastSeenAlertId) {
+                // Real-time new anomaly event
+                lastSeenAlertId = data.latest_alert.id;
+                showToastAlert(data.latest_alert);
+                fetchAlerts();
+            }
+        } else if (lastSeenAlertId === -1) {
+            lastSeenAlertId = 0;
+        }
+
+        // Toggle Stats for Nerds button style
         const statsBtn = document.getElementById('statsToggleBtn');
         const statsPanel = document.getElementById('statsForNerds');
 
@@ -244,10 +393,10 @@ async function fetchStatus() {
 
             if (data.debug_mode) {
                 statsBtn.innerText = onLabel;
-                statsBtn.className = "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-sm";
+                statsBtn.className = "bg-sky-700 hover:bg-sky-600 text-white border border-sky-500/40 px-4 py-2 rounded-md font-bold inline-flex items-center gap-2 transition-all cursor-pointer shadow-sm";
             } else {
                 statsBtn.innerText = offLabel;
-                statsBtn.className = "bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer";
+                statsBtn.className = "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-4 py-2 rounded-md font-semibold inline-flex items-center gap-2 transition-all cursor-pointer";
             }
         }
 
@@ -366,24 +515,24 @@ async function fetchStatus() {
         if (statusBadge) {
             if (data.is_file_missing) {
                 statusBadge.innerText = (ui && ui.status_file_missing) ? ui.status_file_missing : (ui && ui.video_missing ? ui.video_missing : "FILE MISSING");
-                statusBadge.className = "bg-rose-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm";
+                statusBadge.className = "bg-rose-500 text-white px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider whitespace-nowrap shadow-sm";
             } else if (data.is_live) {
                 if (data.camera_connected) {
                     statusBadge.innerText = (ui && ui.status_live) ? ui.status_live : (ui && ui.playing ? ui.playing : "LIVE STREAM");
-                    statusBadge.className = "bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm";
+                    statusBadge.className = "bg-emerald-500 text-slate-950 px-4 py-1.5 rounded-md text-xs font-extrabold uppercase tracking-wider whitespace-nowrap shadow-sm";
                 } else {
                     statusBadge.innerText = (ui && ui.status_connecting) ? ui.status_connecting : (ui && ui.cam_connecting ? ui.cam_connecting : "CONNECTING...");
-                    statusBadge.className = "bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm animate-pulse";
+                    statusBadge.className = "bg-amber-500 text-slate-950 px-4 py-1.5 rounded-md text-xs font-extrabold uppercase tracking-wider whitespace-nowrap shadow-sm animate-pulse";
                 }
             } else {
                 if (data.is_paused) {
                     const label = (ui && (ui.status_paused || ui.paused)) ? (ui.status_paused || ui.paused) : "PAUSED";
                     statusBadge.innerText = label;
-                    statusBadge.className = "bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm";
+                    statusBadge.className = "bg-amber-500 text-slate-950 px-4 py-1.5 rounded-md text-xs font-extrabold uppercase tracking-wider whitespace-nowrap shadow-sm";
                 } else {
                     const label = (ui && (ui.status_playing || ui.playing)) ? (ui.status_playing || ui.playing) : "PLAYING";
                     statusBadge.innerText = label;
-                    statusBadge.className = "bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider whitespace-nowrap shadow-sm";
+                    statusBadge.className = "bg-emerald-500 text-slate-950 px-4 py-1.5 rounded-md text-xs font-extrabold uppercase tracking-wider whitespace-nowrap shadow-sm";
                 }
             }
         }
@@ -393,10 +542,10 @@ async function fetchStatus() {
         if (playBtn) {
             if (data.is_paused) {
                 playBtn.innerText = ui ? ui.btn_play : "▶ Play";
-                playBtn.className = "bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-1.5 transition-all active:translate-y-0.5 cursor-pointer shadow-sm";
+                playBtn.className = "bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/30 px-5 py-2 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition-all active:translate-y-0.5 cursor-pointer shadow-lg shadow-emerald-600/25";
             } else {
                 playBtn.innerText = ui ? ui.btn_pause : "⏸ Pause";
-                playBtn.className = "bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-1.5 transition-all active:translate-y-0.5 cursor-pointer shadow-sm";
+                playBtn.className = "bg-sky-600 hover:bg-sky-500 text-white border border-sky-400/30 px-5 py-2 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition-all active:translate-y-0.5 cursor-pointer shadow-lg shadow-sky-600/25";
             }
         }
 
@@ -434,28 +583,29 @@ async function fetchDailyHistory() {
         if (!tbody) return;
 
         if (countBadge && data.total !== undefined) {
+            historyTotal = data.total;
             const label = data.total === 1 ? (ui && ui.record ? ui.record : 'record') : (ui && ui.records ? ui.records : 'records');
             countBadge.innerText = `${data.total} ${label}`;
         }
         
         if (!data.history || data.history.length === 0) {
             const noRecText = ui ? ui.no_records : "No daily records saved yet";
-            tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-500 font-sans">${noRecText}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500 font-sans">${noRecText}</td></tr>`;
             return;
         }
         
         tbody.innerHTML = data.history.map(row => {
             const updatedTime = row.updated_at ? row.updated_at.replace('T', ' ').substring(0, 19) : '-';
             const netSign = row.net_count > 0 ? '+' : '';
-            const netColor = row.net_count >= 0 ? 'text-blue-400' : 'text-rose-400';
+            const netColor = row.net_count >= 0 ? 'text-sky-400' : 'text-rose-400';
             
             return `
-                <tr class="hover:bg-slate-700/40 transition-colors">
-                    <td class="py-3 px-4 font-bold text-slate-200">${row.date}</td>
-                    <td class="py-3 px-4 text-emerald-400 font-semibold">${row.in_count}</td>
-                    <td class="py-3 px-4 text-amber-400 font-semibold">${row.out_count}</td>
-                    <td class="py-3 px-4 ${netColor} font-bold">${netSign}${row.net_count}</td>
-                    <td class="py-3 px-4 text-slate-400 text-[11px]">${updatedTime}</td>
+                <tr class="hover:bg-slate-800/60 transition-colors">
+                    <td class="py-4 px-5 font-bold text-slate-200">${row.date}</td>
+                    <td class="py-4 px-5 text-emerald-400 font-bold">${row.in_count}</td>
+                    <td class="py-4 px-5 text-amber-400 font-bold">${row.out_count}</td>
+                    <td class="py-4 px-5 ${netColor} font-black">${netSign}${row.net_count}</td>
+                    <td class="py-4 px-5 text-slate-400 text-xs">${updatedTime}</td>
                 </tr>
             `;
         }).join('');
@@ -471,33 +621,45 @@ async function fetchAlerts() {
         const data = await res.json();
         const tbody = document.getElementById('alertsTableBody');
         const countBadge = document.getElementById('alertsCountBadge');
+        const alertsKpiCount = document.getElementById('alertsKpiCount');
         const ui = currentLocaleData ? currentLocaleData.ui : null;
         
         if (!tbody) return;
         
         if (countBadge && data.total !== undefined) {
-            const label = data.total === 1 ? (ui && ui.alert_singular ? ui.alert_singular : 'inconsistency') : (ui && ui.alert_plural ? ui.alert_plural : 'inconsistencies');
+            alertsTotal = data.total;
+            const label = data.total === 1 ? (ui && ui.record ? ui.record : 'record') : (ui && ui.records ? ui.records : 'records');
             countBadge.innerText = `${data.total} ${label}`;
+        }
+        if (alertsKpiCount && data.total !== undefined) {
+            alertsKpiCount.innerText = data.total;
         }
         
         if (!data.alerts || data.alerts.length === 0) {
             const emptyText = ui ? ui.no_alerts : "No inconsistencies detected yet.";
-            tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-500 font-sans">${emptyText}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-500 font-sans">${emptyText}</td></tr>`;
             return;
         }
         
+        const btnText = ui ? (ui.btn_view_alert || "Details") : "Details";
+
         tbody.innerHTML = data.alerts.map(row => {
-            const timeStr = row.timestamp ? row.timestamp.replace('T', ' ').substring(0, 19) : '-';
+            alertsMap[row.id] = row;
+            const timeStr = formatTime12h(row.timestamp);
             const discSign = row.discrepancy > 0 ? `+${row.discrepancy}` : `${row.discrepancy}`;
             const discColor = row.discrepancy > 0 ? 'text-rose-400 font-bold' : 'text-amber-400 font-bold';
             
             return `
-                <tr class="hover:bg-slate-700/40 transition-colors">
-                    <td class="py-3 px-4 text-slate-400 text-[11px] font-mono">${timeStr}</td>
-                    <td class="py-3 px-4 text-emerald-400 font-semibold">${row.in_count}</td>
-                    <td class="py-3 px-4 text-amber-400 font-semibold">${row.out_count}</td>
-                    <td class="py-3 px-4 ${discColor}">${discSign}</td>
-                    <td class="py-3 px-4 text-slate-200 text-xs">${row.message}</td>
+                <tr class="hover:bg-slate-800/60 transition-colors">
+                    <td class="py-3 px-3.5 text-slate-300 text-[11px] font-mono whitespace-nowrap">${timeStr}</td>
+                    <td class="py-3 px-2 text-emerald-400 font-bold">${row.in_count}</td>
+                    <td class="py-3 px-2 text-amber-400 font-bold">${row.out_count}</td>
+                    <td class="py-3 px-2 ${discColor}">${discSign}</td>
+                    <td class="py-3 px-3.5 text-right">
+                        <button onclick="openAlertDetailsModal(${row.id})" title="${btnText}" class="p-1.5 bg-slate-800 hover:bg-sky-600 text-slate-400 hover:text-white border border-slate-700 hover:border-sky-500/50 rounded-md transition-all inline-flex items-center justify-center cursor-pointer shadow-sm">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        </button>
+                    </td>
                 </tr>
             `;
         }).join('');
@@ -506,31 +668,66 @@ async function fetchAlerts() {
     }
 }
 
+function openAlertDetailsModal(alertId) {
+    const alert = alertsMap[alertId];
+    if (!alert) return;
+
+    const modal = document.getElementById('alertDetailsModal');
+    const inEl = document.getElementById('modalAlertIn');
+    const outEl = document.getElementById('modalAlertOut');
+    const diffEl = document.getElementById('modalAlertDiff');
+    const msgEl = document.getElementById('modalAlertMessage');
+    const timeEl = document.getElementById('modalAlertTime');
+
+    if (inEl) inEl.innerText = alert.in_count;
+    if (outEl) outEl.innerText = alert.out_count;
+    if (diffEl) {
+        const sign = alert.discrepancy > 0 ? `+${alert.discrepancy}` : alert.discrepancy;
+        diffEl.innerText = sign;
+    }
+    if (msgEl) msgEl.innerText = alert.message;
+    if (timeEl) timeEl.innerText = formatTime12h(alert.timestamp);
+
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+}
+
+function closeAlertDetailsModal() {
+    const modal = document.getElementById('alertDetailsModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
 function showToastAlert(alert) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
     const ui = currentLocaleData ? currentLocaleData.ui : null;
-    const title = ui ? ui.toast_alert_title : "⚠️ IN/OUT Inconsistency Detected";
+    const title = ui ? (ui.toast_alert_title || "🚨 CRITICAL ALERT: Inconsistency Detected") : "🚨 CRITICAL ALERT: Inconsistency Detected";
     
-    // Play synthesized modern chime sound
+    // Play critical alert notification sound
     playNotificationSound();
 
     const toast = document.createElement('div');
-    toast.className = "pointer-events-auto bg-slate-900/95 border-2 border-rose-500 text-slate-100 p-4 rounded-xl shadow-2xl flex items-start gap-3 transition-all duration-300 transform translate-y-2 opacity-0 backdrop-blur-md";
+    toast.className = "pointer-events-auto bg-slate-900/95 border-2 border-rose-500/90 text-slate-100 p-4 rounded-lg shadow-2xl shadow-rose-950/70 ring-1 ring-rose-500/50 flex items-start gap-3 transition-all duration-300 transform translate-y-2 opacity-0 backdrop-blur-xl";
     toast.innerHTML = `
-        <div class="p-2 bg-rose-500/20 text-rose-400 rounded-lg shrink-0">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="p-2 bg-rose-500/20 text-rose-400 rounded-md shrink-0 border border-rose-500/30">
+            <svg class="w-5 h-5 animate-pulse text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
             </svg>
         </div>
         <div class="flex-1 min-w-0">
-            <div class="text-xs font-bold text-rose-400 uppercase tracking-wide flex items-center justify-between">
+            <div class="text-xs font-black text-rose-400 uppercase tracking-wide flex items-center justify-between">
                 <span>${title}</span>
+                <span class="bg-rose-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider">CRITICAL</span>
             </div>
-            <div class="text-xs text-slate-200 mt-1 font-medium leading-relaxed">${alert.message}</div>
-            <div class="text-[10px] text-slate-400 mt-1.5 font-mono">${alert.timestamp ? alert.timestamp.replace('T', ' ').substring(0, 19) : ''}</div>
+            <div class="text-xs text-slate-200 mt-1 font-semibold leading-relaxed">${alert.message}</div>
+            <div class="text-[10px] text-rose-300/80 mt-1.5 font-mono font-bold">${formatTime12h(alert.timestamp)}</div>
         </div>
-        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-200 text-base font-bold ml-1 cursor-pointer">&times;</button>
+        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white text-base font-bold ml-1 cursor-pointer">&times;</button>
     `;
     
     container.appendChild(toast);
@@ -540,11 +737,13 @@ function showToastAlert(alert) {
         toast.classList.remove('translate-y-2', 'opacity-0');
     }, 50);
     
-    // Auto-dismiss after 9 seconds
+    // Auto-dismiss after 10 seconds
     setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-y-2');
-        setTimeout(() => toast.remove(), 400);
-    }, 9000);
+        if (toast.parentElement) {
+            toast.classList.add('opacity-0', 'translate-y-2');
+            setTimeout(() => toast.remove(), 400);
+        }
+    }, 10000);
 }
 
 async function clearAllAlerts() {
@@ -626,7 +825,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Modal backdrop click handler
+    const modal = document.getElementById('alertDetailsModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeAlertDetailsModal();
+            }
+        });
+    }
+
     window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeAlertDetailsModal();
+            return;
+        }
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
         if (e.code === 'Space') {
             e.preventDefault();

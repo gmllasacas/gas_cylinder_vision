@@ -1,6 +1,10 @@
 import os
 from typing import List, Tuple, Optional, Any, Dict
 import numpy as np
+from ultralytics.utils import checks
+# Mark headless environment to suppress unnecessary cv2.imshow GUI desktop warnings
+checks.check_imshow = lambda warn=False: False
+
 from ultralytics import solutions
 from app.core.logging import logger
 

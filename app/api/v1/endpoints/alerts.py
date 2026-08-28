@@ -1,4 +1,4 @@
-﻿from typing import Optional
+from typing import Optional
 from fastapi import APIRouter, Query
 from app.db import db_repo
 from app.services.stream_manager import video_service
@@ -14,12 +14,14 @@ router = APIRouter(prefix="/api/alerts", tags=["Inconsistency & Anomaly Alerts"]
 )
 def get_alerts(
     limit: int = Query(50, ge=1, le=500, description="Max alerts to retrieve"),
-    target_date: Optional[str] = Query(None, description="Optional filter date (YYYY-MM-DD)"),
-    unread_only: bool = Query(False, description="Filter to only unread/unacknowledged alerts")
+    target_date: Optional[str] = Query(None, description="Optional filter date (YYYY-MM-DD), default is today"),
+    unread_only: bool = Query(False, description="Filter to only unread/unacknowledged alerts"),
+    all_dates: bool = Query(False, description="If true, retrieves alerts across all historical dates")
 ):
+    date_val = None if all_dates else (target_date or db_repo._today_str())
     alerts_raw = db_repo.get_inconsistency_alerts(
         limit=limit,
-        target_date=target_date,
+        target_date=date_val,
         unread_only=unread_only
     )
     items = [InconsistencyAlertResponse(**a) for a in alerts_raw]
