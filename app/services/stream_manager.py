@@ -219,6 +219,16 @@ class VideoStreamService:
             self.is_paused = not self.is_paused
             return self.is_paused
 
+    def set_loop(self, enabled: bool) -> bool:
+        with self.lock:
+            self.capture.loop = bool(enabled)
+            return self.capture.loop
+
+    def toggle_loop(self) -> bool:
+        with self.lock:
+            self.capture.loop = not self.capture.loop
+            return self.capture.loop
+
     def seek_frame(self, target_frame: int):
         with self.lock:
             success, frame = self.capture.seek_frame(target_frame)

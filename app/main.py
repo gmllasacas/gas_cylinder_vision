@@ -46,6 +46,17 @@ def create_app() -> FastAPI:
             }
         )
 
+    @application.get("/v2", tags=["Dashboard"])
+    def get_index_v2():
+        return FileResponse(
+            index_html,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+
     # Include Modular API Routers
     application.include_router(api_router)
 

@@ -5,6 +5,15 @@ from fastapi.testclient import TestClient
 def test_dashboard_index(client: TestClient):
     response = client.get("/")
     assert response.status_code == 200
+    assert "data-theme=\"dark\"" in response.text
+    assert "alpine.min.js" in response.text
+
+@pytest.mark.integration
+def test_dashboard_index_v2(client: TestClient):
+    response = client.get("/v2")
+    assert response.status_code == 200
+    assert "data-theme=\"dark\"" in response.text
+    assert "alpine.min.js" in response.text
 
 @pytest.mark.integration
 def test_get_api_status(client: TestClient):
@@ -61,3 +70,53 @@ def test_reset_playback(client: TestClient):
     data = response.json()
     assert data["in_count"] == 0
     assert data["out_count"] == 0
+
+@pytest.mark.integration
+def test_playback_restart(client: TestClient):
+    response = client.post("/api/playback/restart")
+    assert response.status_code == 200
+    data = response.json()
+    assert "current_frame" in data
+
+@pytest.mark.integration
+def test_playback_loop(client: TestClient):
+    # Get current loop state
+    res1 = client.get("/api/status")
+    init_loop = res1.json()["loop"]
+    
+    # Toggle loop
+    response = client.post("/api/playback/loop")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["loop"] == (not init_loop)
+    
+    # Set explicit loop state back
+    response2 = client.post("/api/playback/loop", params={"enabled": init_loop})
+    assert response2.status_code == 200
+    assert response2.json()["loop"] == init_loop
+
+@pytest.mark.integration
+def test_playback_seek_offset(client: TestClient):
+    response = client.post("/api/playback/seek_offset", params={"seconds": 5.0})
+    assert response.status_code == 200
+    data = response.json()
+    assert "current_frame" in data
+
+@pytest.mark.integration
+def test_playback_step(client: TestClient):
+    response = client.post("/api/playback/step", params={"delta_frames": 1})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_paused"] is True
+
+@pytest.mark.integration
+def test_settings_confidence_alias(client: TestClient):
+    response = client.post("/api/settings/confidence", params={"value": 0.55})
+    assert response.status_code == 200
+    assert response.json()["conf"] == 0.55
+
+@pytest.mark.integration
+def test_settings_language_alias(client: TestClient):
+    response = client.post("/api/settings/language", params={"lang": "en"})
+    assert response.status_code == 200
+    assert response.json()["lang"] == "en"

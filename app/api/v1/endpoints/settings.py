@@ -24,6 +24,16 @@ def set_confidence(value: float = Query(..., ge=0.01, le=0.99, description="Conf
     return video_service.get_status()
 
 @router.post(
+    "/api/settings/confidence",
+    response_model=StreamStatusResponse,
+    summary="Set Detection Confidence (Alias)",
+    description="Updates the YOLO detection confidence threshold."
+)
+def set_confidence_alias(value: float = Query(..., ge=0.01, le=0.99, description="Confidence threshold")):
+    video_service.set_conf(value)
+    return video_service.get_status()
+
+@router.post(
     "/api/settings/speed",
     response_model=StreamStatusResponse,
     summary="Set Playback Speed",
@@ -41,6 +51,20 @@ def set_playback_speed(value: float = Query(..., ge=0.25, le=10.0, description="
 )
 def set_language(value: str = Query("en", description="Language code (e.g. en, es)")):
     video_service.set_lang(value)
+    return video_service.get_status()
+
+@router.post(
+    "/api/settings/language",
+    response_model=StreamStatusResponse,
+    summary="Set Active Language (Alias)",
+    description="Switches the UI and visual overlay language."
+)
+def set_language_alias(
+    value: Optional[str] = Query(None, description="Language code"),
+    lang: Optional[str] = Query(None, description="Language code alias")
+):
+    code = lang or value or "en"
+    video_service.set_lang(code)
     return video_service.get_status()
 
 @router.post(
