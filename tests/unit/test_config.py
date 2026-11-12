@@ -34,3 +34,17 @@ def test_streaming_quality_validation():
 
     with pytest.raises(ValidationError):
         StreamingConfig(jpeg_quality=105)  # Must be <= 100
+
+@pytest.mark.unit
+def test_detector_device_config():
+    default_cfg = DetectorConfig()
+    assert default_cfg.device == "auto"
+
+    custom_cfg = DetectorConfig(device="cuda:0")
+    assert custom_cfg.device == "cuda:0"
+
+@pytest.mark.unit
+def test_app_settings_device_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("YOLO_DEVICE", "cuda:0")
+    settings = AppSettings.load()
+    assert settings.detector.device == "cuda:0"

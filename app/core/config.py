@@ -24,6 +24,7 @@ class DetectorConfig(BaseModel):
     confidence: float = Field(default=0.50, ge=0.0, le=1.0)
     imgsz: int = Field(default=640, ge=32, le=1920)
     frame_skip: int = Field(default=2, ge=1, le=10)
+    device: str = Field(default="auto", description="Compute device: 'auto', 'cuda', 'cuda:0', '0', 'cpu', 'mps'")
     line_points: List[List[int]] = Field(
         default_factory=lambda: [[1200, 400], [1700, 400]]
     )
@@ -96,6 +97,12 @@ class AppSettings(BaseModel):
             data["source"] = {}
         if os.getenv("CAMERA_URL"):
             data["source"]["camera_url"] = os.getenv("CAMERA_URL")
+
+        if "detector" not in data:
+            data["detector"] = {}
+        dev_env = os.getenv("YOLO_DEVICE") or os.getenv("DEVICE")
+        if dev_env:
+            data["detector"]["device"] = dev_env
 
         instance = cls(**data)
         if os.getenv("DB_PATH"):

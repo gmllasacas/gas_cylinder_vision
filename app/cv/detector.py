@@ -19,6 +19,7 @@ class YOLODetector:
         confidence: float = 0.50,
         imgsz: int = 640,
         frame_skip: int = 2,
+        device: str = "auto",
         line_points: Optional[List[List[int]]] = None
     ):
         self.models_dir = models_dir
@@ -27,6 +28,8 @@ class YOLODetector:
         self.confidence = confidence
         self.imgsz = imgsz
         self.frame_skip = frame_skip
+        self.device_setting = device or "auto"
+        self.resolved_device, self.device_info = self._resolve_device(self.device_setting)
         self.line_points = [tuple(p) for p in (line_points or [[1200, 400], [1700, 400]])]
         
         self.active_model_path = self._resolve_model_path()
@@ -36,6 +39,36 @@ class YOLODetector:
         self.last_boxes: List[Tuple[List[float], float, int, Optional[int]]] = []
         
         self.init_counter()
+
+    def _resolve_device(self, target_dev: str) -> Tuple[str, str]:
+        """Resolves the active hardware device with safe fallbacks."""
+        import torch
+        target_lower = str(target_dev).strip().lower()
+        cuda_avail = torch.cuda.is_available()
+
+        if target_lower in ("auto", "", "none"):
+            if cuda_avail:
+                dev_name = torch.cuda.get_device_name(0)
+                logger.info(f"Auto-detected CUDA GPU: {dev_name}")
+                return "0", f"CUDA: {dev_name}"
+            else:
+                threads = os.cpu_count() or 4
+                logger.info(f"Auto-detected CPU execution ({threads} threads)")
+                return "cpu", f"CPU ({threads} Threads)"
+
+        if "cuda" in target_lower or target_lower.isdigit():
+            if cuda_avail:
+                dev_id = 0 if target_lower in ("cuda", "0") else (int(target_lower.split(":")[-1]) if ":" in target_lower else 0)
+                dev_name = torch.cuda.get_device_name(dev_id)
+                logger.info(f"Using configured CUDA device [{target_dev}]: {dev_name}")
+                return str(target_dev), f"CUDA: {dev_name}"
+            else:
+                logger.warning(f"CUDA requested ('{target_dev}') but PyTorch CUDA is not available. Falling back to CPU.")
+                threads = os.cpu_count() or 4
+                return "cpu", f"CPU ({threads} Threads)"
+
+        threads = os.cpu_count() or 4
+        return target_dev, f"{target_dev.upper()} ({threads} Threads)"
 
     def _resolve_model_path(self) -> str:
         """Finds the best available model weights file."""
@@ -58,14 +91,16 @@ class YOLODetector:
             self.counter = solutions.ObjectCounter(
                 show=False,
                 region=self.line_points,
-                model=self.active_model_path
+                model=self.active_model_path,
+                device=self.resolved_device
             )
             if hasattr(self.counter, "LOGGER") and self.counter.LOGGER is not None:
                 self.counter.LOGGER.setLevel(40)  # logging.ERROR
             if hasattr(self.counter, "model") and hasattr(self.counter.model, "overrides"):
                 self.counter.model.overrides["conf"] = self.confidence
                 self.counter.model.overrides["imgsz"] = self.imgsz
-            logger.info("ObjectCounter initialized successfully.")
+                self.counter.model.overrides["device"] = self.resolved_device
+            logger.info(f"ObjectCounter initialized on {self.device_info}")
         except Exception as e:
             logger.warning(f"Error initializing Ultralytics ObjectCounter: {e}")
             self.counter = None

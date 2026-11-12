@@ -113,9 +113,11 @@ files.download('runs/detect/train/weights/best.pt')
 ## 5. Deploy to Your Local Project
 
 1. Move the downloaded `best.pt` file to the `models/` directory:
-   `d:\laragon_6\www\gas_stream\models\best.pt`
+   `models/best.pt` (or `d:\laragon\www\gas_stream\models\best.pt`)
 2. Start or reload your FastAPI application:
    ```bash
-   uvicorn main:app --reload --port 8000
+   python -m uvicorn app.main:app --reload --port 8000
+   # or
+   python -m app
    ```
 3. Open `http://localhost:8000` to inspect live bounding box detections and tracking accuracy with the debug overlay!

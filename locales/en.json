@@ -50,6 +50,7 @@
     "nerd_res": "Current / Optimal Res:",
     "nerd_fps": "FPS (Stream / Max):",
     "nerd_model": "Model / Weights:",
+    "nerd_device": "Compute Device:",
     "nerd_latency": "Inference / Latency:",
     "nerd_tracks": "Active Tracks:",
     "nerd_counts": "Cylinder Counts:",

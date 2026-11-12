@@ -6,16 +6,23 @@
     "camera_name": "IP Camera",
     "reconnect_interval_sec": 3
   },
-  "language": "es",
+  "language": "en",
   "detector": {
     "default_model": "best.pt",
     "fallback_model": "yolov8n.pt",
     "confidence": 0.50,
     "imgsz": 640,
     "frame_skip": 2,
+    "device": "auto",
     "line_points": [
-      [1200, 400],
-      [1700, 400]
+      [
+        1200,
+        400
+      ],
+      [
+        1700,
+        400
+      ]
     ]
   },
   "streaming": {

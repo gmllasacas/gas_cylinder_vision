@@ -208,6 +208,7 @@ function applyLocalization() {
     setText('i18n_nerd_res', ui.nerd_res);
     setText('i18n_nerd_fps', ui.nerd_fps);
     setText('i18n_nerd_model', ui.nerd_model);
+    setText('i18n_nerd_device', ui.nerd_device);
     setText('i18n_nerd_latency', ui.nerd_latency);
     setText('i18n_nerd_tracks', ui.nerd_tracks);
     setText('i18n_nerd_counts', ui.nerd_counts);
@@ -415,6 +416,7 @@ async function fetchStatus() {
                 const nStreamFps = document.getElementById('nerdStreamFps');
                 const nMaxFps = document.getElementById('nerdMaxFps');
                 const nModel = document.getElementById('nerdModel');
+                const nDevice = document.getElementById('nerdDevice');
                 const nLatency = document.getElementById('nerdLatency');
                 const nTracks = document.getElementById('nerdTracks');
                 const nIn = document.getElementById('nerdIn');
@@ -427,6 +429,7 @@ async function fetchStatus() {
                 if (nStreamFps && typeof data.actual_stream_fps === 'number') nStreamFps.innerText = data.actual_stream_fps.toFixed(1);
                 if (nMaxFps && typeof data.max_hardware_fps === 'number') nMaxFps.innerText = data.max_hardware_fps.toFixed(0);
                 if (nModel) nModel.innerText = `${data.active_model} (conf: ${data.conf})`;
+                if (nDevice) nDevice.innerText = data.device || 'Auto';
                 if (nLatency) nLatency.innerText = `AI: ${data.ai_latency_ms || 0}ms | Enc: ${data.encode_latency_ms || 0}ms`;
                 if (nTracks) nTracks.innerText = `${data.active_tracks || 0} objects`;
                 if (nIn) nIn.innerText = `${data.in_count} IN`;

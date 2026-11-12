@@ -39,6 +39,7 @@ class VideoStreamService:
             confidence=self.settings.detector.confidence,
             imgsz=self.settings.detector.imgsz,
             frame_skip=self.settings.detector.frame_skip,
+            device=self.settings.detector.device,
             line_points=self.settings.detector.line_points
         )
         self.counter = LineCrossingCounter(
@@ -314,6 +315,7 @@ class VideoStreamService:
                 "camera_connected": self.capture.camera_connected,
                 "connection_error_msg": self.capture.connection_error_msg,
                 "active_model": os.path.basename(self.detector.active_model_path),
+                "device": self.detector.device_info,
                 "conf": self.detector.confidence,
                 "imgsz": self.detector.imgsz,
                 "frame_skip": self.detector.frame_skip,

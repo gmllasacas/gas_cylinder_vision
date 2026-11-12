@@ -50,6 +50,7 @@
     "nerd_res": "Resolución / Base:",
     "nerd_fps": "FPS (Flujo / Máx):",
     "nerd_model": "Modelo / Pesos:",
+    "nerd_device": "Dispositivo de Cómputo:",
     "nerd_latency": "Inferencia / Latencia:",
     "nerd_tracks": "Objetos Activos:",
     "nerd_counts": "Conteo de Tanques:",
