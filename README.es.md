@@ -13,6 +13,8 @@
 
 **Gas Cylinder Vision** es un servicio web y panel de Visión Artificial en tiempo real para contar cilindros de gas y detectar discrepancias de inventario desde cámaras RTSP en vivo o videos grabados.
 
+![Panel de Gas Cylinder Vision](docs/project.png)
+
 ---
 
 ## Características Principales
@@ -28,12 +30,12 @@
 ## Arquitectura y Stack
 
 ```mermaid
-flowchart LR
-    Source["RTSP / Video"] --> CV["YOLOv8 + Contador Línea/Polígono"]
+flowchart TD
+    Source["RTSP / Video"] --> CV["YOLOv8 + Contador"]
     CV --> Anomaly["Detector de Anomalías"]
     CV --> DB[("SQLite WAL")]
     Anomaly --> DB
-    CV --> API["FastAPI (REST, MJPEG, SSE)"]
+    CV --> API["FastAPI (REST / MJPEG / SSE)"]
     DB --> API
     API --> UI["Panel Alpine.js"]
 ```

@@ -13,6 +13,8 @@ English | [Español](README.es.md)
 
 **Gas Cylinder Vision** is a real-time Computer Vision web service and dashboard for counting gas cylinders and detecting inventory discrepancies from live RTSP cameras or recorded video.
 
+![Gas Cylinder Vision Dashboard](docs/project.png)
+
 ---
 
 ## Key Features
@@ -28,12 +30,12 @@ English | [Español](README.es.md)
 ## Architecture & Tech Stack
 
 ```mermaid
-flowchart LR
-    Source["RTSP / Video"] --> CV["YOLOv8 + Line/Polygon Counter"]
+flowchart TD
+    Source["RTSP / Video"] --> CV["YOLOv8 + Counter"]
     CV --> Anomaly["Anomaly Detector"]
     CV --> DB[("SQLite WAL")]
     Anomaly --> DB
-    CV --> API["FastAPI (REST, MJPEG, SSE)"]
+    CV --> API["FastAPI (REST / MJPEG / SSE)"]
     DB --> API
     API --> UI["Alpine.js Dashboard"]
 ```
