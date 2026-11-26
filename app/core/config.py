@@ -39,7 +39,7 @@ class AnomalyConfig(BaseModel):
     batch_idle_seconds: int = Field(default=15, ge=2, le=120)
 
 class AppSettings(BaseModel):
-    app_name: str = "Gas Tank Counter Dashboard"
+    app_name: str = "Gas Cylinder Vision"
     language: str = "es"
     timezone: str = "America/Lima"
     admin_username: str = "admin"
