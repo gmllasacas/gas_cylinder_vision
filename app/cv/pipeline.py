@@ -38,7 +38,6 @@ class CVPipeline:
         4. Resolution resizing & JPEG compression
         """
         t_start = time.time()
-        pristine_frame = frame.copy()
 
         # 1. AI Inference & Tracking
         t_infer_start = time.time()
@@ -50,16 +49,17 @@ class CVPipeline:
         self.counter.update_tracks(boxes_list)
         self.counter.sync_external_counts(self.detector.counter)
 
-        # 3. Visual Annotations
+        # 3. Visual Annotations (in-place modification avoids full frame duplication)
         if self.debug_mode:
             annotated_frame = self.renderer.draw_overlays(
-                frame=pristine_frame,
+                frame=frame,
                 boxes_list=boxes_list,
                 track_history=self.counter.track_history,
-                get_class_name_fn=self.detector.get_class_name
+                get_class_name_fn=self.detector.get_class_name,
+                copy=False
             )
         else:
-            annotated_frame = pristine_frame
+            annotated_frame = frame
 
         # 4. Encoding
         t_enc_start = time.time()

@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 from typing import List, Literal, Optional, Any, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from app.core.logging import logger
 
 from dotenv import load_dotenv
@@ -41,10 +41,15 @@ class AnomalyConfig(BaseModel):
 class AppSettings(BaseModel):
     app_name: str = "Gas Tank Counter Dashboard"
     language: str = "es"
+    timezone: str = "America/Lima"
+    admin_username: str = "admin"
+    admin_password: str = "admin"
     host: str = "0.0.0.0"
     port: int = 8000
     environment: str = "development"
     log_level: str = "INFO"
+    ssl_keyfile: Optional[str] = None
+    ssl_certfile: Optional[str] = None
     source: SourceConfig = Field(default_factory=SourceConfig)
     detector: DetectorConfig = Field(default_factory=DetectorConfig)
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
@@ -61,6 +66,18 @@ class AppSettings(BaseModel):
     static_dir: str = str(ROOT_DIR / "static")
     templates_dir: str = str(ROOT_DIR / "templates")
     config_path: str = str(ROOT_DIR / "config.json")
+
+    @model_validator(mode="after")
+    def validate_production_credentials(self) -> "AppSettings":
+        if str(self.environment).lower() == "production":
+            is_default_user = str(self.admin_username).lower() == "admin"
+            is_default_pass = str(self.admin_password).lower() == "admin"
+            if is_default_user and is_default_pass:
+                raise ValueError(
+                    "Default credentials 'admin:admin' are strictly prohibited in production mode. "
+                    "Configure strong ADMIN_USERNAME and ADMIN_PASSWORD environment variables."
+                )
+        return self
 
     @classmethod
     def load(cls, config_file: Optional[str] = None) -> "AppSettings":
@@ -92,6 +109,11 @@ class AppSettings(BaseModel):
             data["port"] = 8000
         data["environment"] = os.getenv("ENVIRONMENT", data.get("environment", "development"))
         data["log_level"] = os.getenv("LOG_LEVEL", data.get("log_level", "INFO"))
+        data["timezone"] = os.getenv("TIMEZONE", data.get("timezone", "America/Lima"))
+        data["admin_username"] = os.getenv("ADMIN_USERNAME", data.get("admin_username", "admin"))
+        data["admin_password"] = os.getenv("ADMIN_PASSWORD", data.get("admin_password", "admin"))
+        data["ssl_keyfile"] = os.getenv("SSL_KEYFILE", data.get("ssl_keyfile"))
+        data["ssl_certfile"] = os.getenv("SSL_CERTFILE", data.get("ssl_certfile"))
 
         if "source" not in data:
             data["source"] = {}
@@ -118,8 +140,12 @@ class AppSettings(BaseModel):
         target_path = Path(config_file) if config_file else Path(self.config_path)
         try:
             # Dump only configuration fields, omitting internal path attributes
+            src_dump = self.source.model_dump()
+            if os.getenv("CAMERA_URL"):
+                src_dump["camera_url"] = ""
+
             data = {
-                "source": self.source.model_dump(),
+                "source": src_dump,
                 "language": self.language,
                 "detector": self.detector.model_dump(),
                 "streaming": self.streaming.model_dump(),
@@ -133,10 +159,14 @@ class AppSettings(BaseModel):
             logger.error(f"Failed to save configuration to {target_path}: {e}")
             return False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, mask_secrets: bool = True) -> Dict[str, Any]:
         """Returns clean dictionary compatible with existing API responses and legacy frontend."""
+        src_data = self.source.model_dump()
+        if mask_secrets and src_data.get("camera_url"):
+            from app.cv.capture import VideoCaptureManager
+            src_data["camera_url"] = VideoCaptureManager.mask_credentials(src_data["camera_url"])
         return {
-            "source": self.source.model_dump(),
+            "source": src_data,
             "language": self.language,
             "detector": self.detector.model_dump(),
             "streaming": self.streaming.model_dump(),

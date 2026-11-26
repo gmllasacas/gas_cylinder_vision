@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background rounded squircle -->
+  <rect width="64" height="64" rx="14" fill="#18181b" stroke="#3f3f46" stroke-width="2"/>
+
+  <!-- Valve & Top Collar Guard -->
+  <path d="M25 15C25 10.5 28 7.5 32 7.5C36 7.5 39 10.5 39 15" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="30" y="10" width="4" height="5" rx="1" fill="#10b981"/>
+
+  <!-- Cylinder Tank Body -->
+  <rect x="20" y="15" width="24" height="38" rx="8" fill="url(#tankGrad)" stroke="#71717a" stroke-width="1.5"/>
+
+  <!-- Directional Counter Indicator Bands (IN = Emerald, OUT = Amber) -->
+  <line x1="21" y1="27" x2="43" y2="27" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+  <line x1="21" y1="41" x2="43" y2="41" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Specular Reflection Highlight -->
+  <path d="M23 20V48" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.3"/>
+
+  <!-- Center Status Dot -->
+  <circle cx="32" cy="34" r="3" fill="#34d399"/>
+
+  <!-- Gradients -->
+  <defs>
+    <linearGradient id="tankGrad" x1="20" y1="15" x2="44" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3f3f46"/>
+      <stop offset="45%" stop-color="#27272a"/>
+      <stop offset="100%" stop-color="#18181b"/>
+    </linearGradient>
+  </defs>
+</svg>
+

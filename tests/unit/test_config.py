@@ -48,3 +48,27 @@ def test_app_settings_device_env_override(monkeypatch, tmp_path):
     monkeypatch.setenv("YOLO_DEVICE", "cuda:0")
     settings = AppSettings.load()
     assert settings.detector.device == "cuda:0"
+
+@pytest.mark.unit
+def test_app_settings_production_default_credentials_rejected():
+    with pytest.raises(ValidationError) as excinfo:
+        AppSettings(environment="production", admin_username="admin", admin_password="admin")
+    assert "Default credentials 'admin:admin' are strictly prohibited in production mode" in str(excinfo.value)
+
+@pytest.mark.unit
+def test_app_settings_production_custom_credentials_accepted():
+    prod_settings = AppSettings(
+        environment="production",
+        admin_username="secure_operator",
+        admin_password="SuperSecretPassword123!"
+    )
+    assert prod_settings.environment == "production"
+    assert prod_settings.admin_username == "secure_operator"
+
+@pytest.mark.unit
+def test_app_settings_ssl_configuration(monkeypatch):
+    monkeypatch.setenv("SSL_KEYFILE", "certs/server.key")
+    monkeypatch.setenv("SSL_CERTFILE", "certs/server.crt")
+    settings = AppSettings.load()
+    assert settings.ssl_keyfile == "certs/server.key"
+    assert settings.ssl_certfile == "certs/server.crt"

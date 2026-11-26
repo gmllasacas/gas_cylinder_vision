@@ -1,6 +1,7 @@
 from typing import Optional
-from fastapi import APIRouter, Query
-from app.db import db_repo
+from fastapi import APIRouter, Query, Depends
+from app.db.repository import DailyCountRepository
+from app.api.deps import get_db
 from app.schemas.counts import (
     DailyCountResponse,
     DailyCountHistoryResponse,
@@ -16,8 +17,8 @@ router = APIRouter(prefix="/api/counts", tags=["Daily Counts & History"])
     summary="Get Today's Saved Counts",
     description="Returns the aggregated cylinder count saved in SQLite for today."
 )
-def get_today_counts():
-    record = db_repo.get_or_create_daily()
+def get_today_counts(repo: DailyCountRepository = Depends(get_db)):
+    record = repo.get_or_create_daily()
     return {"status": "success", "data": record}
 
 @router.get(
@@ -29,9 +30,10 @@ def get_today_counts():
 def get_counts_history(
     limit: int = Query(30, ge=1, le=365, description="Number of daily records to return"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
+    repo: DailyCountRepository = Depends(get_db)
 ):
-    history = db_repo.get_history(limit=limit, start_date=start_date, end_date=end_date)
+    history = repo.get_history(limit=limit, start_date=start_date, end_date=end_date)
     return {"status": "success", "total": len(history), "history": history}
 
 @router.get(
@@ -42,9 +44,10 @@ def get_counts_history(
 )
 def get_crossing_events(
     limit: int = Query(50, ge=1, le=500, description="Number of events to return"),
-    date: Optional[str] = Query(None, description="Filter events by date (YYYY-MM-DD)")
+    date: Optional[str] = Query(None, description="Filter events by date (YYYY-MM-DD)"),
+    repo: DailyCountRepository = Depends(get_db)
 ):
-    events = db_repo.get_events(limit=limit, target_date=date)
+    events = repo.get_events(limit=limit, target_date=date)
     return {"status": "success", "total": len(events), "events": events}
 
 @router.post(
@@ -54,9 +57,10 @@ def get_crossing_events(
     description="Resets the stored counts to 0 for a specific date (defaults to today)."
 )
 def reset_daily_counts(
-    date: Optional[str] = Query(None, description="Date to reset (YYYY-MM-DD), default is today")
+    date: Optional[str] = Query(None, description="Date to reset (YYYY-MM-DD), default is today"),
+    repo: DailyCountRepository = Depends(get_db)
 ):
-    record = db_repo.reset_daily_count(target_date=date)
+    record = repo.reset_daily_count(target_date=date)
     return {
         "status": "success",
         "message": f"Daily counts reset successfully for {record['date']}",

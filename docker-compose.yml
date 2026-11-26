@@ -14,5 +14,12 @@ services:
       - HOST=0.0.0.0
     volumes:
       - ./config.json:/app/config.json:rw
+      - ./data:/app/data:rw
       - ./videos:/app/videos:ro
       - ./models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

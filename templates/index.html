@@ -5,10 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gas Cylinder Counting Dashboard</title>
 
-    <!-- Google Fonts: Inter & JetBrains Mono for superior readability -->
+    <!-- Favicon Icons -->
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="shortcut icon" href="/favicon.ico">
+
+    <!-- Google Fonts (Non-blocking with robust offline system fallbacks) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    </noscript>
 
     <!-- Local Vendor Assets: DaisyUI, Tailwind & Alpine.js -->
     <link rel="stylesheet" href="/static/vendor/daisyui.min.css">
@@ -326,13 +336,13 @@
                                     <template x-if="status.is_paused">
                                         <span class="flex items-center gap-1.5">
                                             <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                                            <span>Play</span>
+                                            <span x-text="t('play', 'Play')">Play</span>
                                         </span>
                                     </template>
                                     <template x-if="!status.is_paused">
                                         <span class="flex items-center gap-1.5">
                                             <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                                            <span>Pause</span>
+                                            <span x-text="t('pause', 'Pause')">Pause</span>
                                         </span>
                                     </template>
                                 </button>
@@ -364,6 +374,18 @@
 
                             <!-- Right-aligned Selectors & Toggles -->
                             <div class="flex flex-wrap items-center gap-2">
+                                <!-- Source Selector -->
+                                <div class="inline-flex items-center rounded-md border border-zinc-800 bg-zinc-900 text-xs text-zinc-400" x-show="sources.length > 0">
+                                    <span class="px-2.5 py-1 text-xs opacity-70" x-text="t('source')">Source:</span>
+                                    <select class="bg-transparent text-zinc-200 font-sans font-medium py-1.5 pr-2 pl-1 border-l border-zinc-800 text-xs focus:outline-none cursor-pointer max-w-[170px] truncate"
+                                            :value="status.current_source_id"
+                                            @change="selectSource($event.target.value)">
+                                        <template x-for="src in sources" :key="src.id">
+                                            <option :value="src.id" :selected="src.id === status.current_source_id" class="bg-zinc-900 text-zinc-200" x-text="src.name"></option>
+                                        </template>
+                                    </select>
+                                </div>
+
                                 <!-- Playback Speed Selector -->
                                 <div class="inline-flex items-center rounded-md border border-zinc-800 bg-zinc-900 text-xs text-zinc-400">
                                     <span class="px-2.5 py-1 text-xs opacity-70" x-text="t('speed')">Speed:</span>
@@ -408,7 +430,7 @@
                                         <polyline points="7 23 3 19 7 15"></polyline>
                                         <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
                                     </svg>
-                                    <span x-text="status.loop ? 'Loop ON' : 'Loop OFF'"></span>
+                                    <span x-text="status.loop ? t('loop_on', 'Loop ON') : t('loop_off', 'Loop OFF')"></span>
                                 </button>
 
                                 <!-- Toggle Stats for Nerds HUD -->
@@ -421,7 +443,7 @@
                                         <line x1="12" y1="20" x2="12" y2="4"></line>
                                         <line x1="6" y1="20" x2="6" y2="14"></line>
                                     </svg>
-                                    <span x-text="showStats ? 'Stats ON' : 'Stats OFF'"></span>
+                                    <span x-text="showStats ? t('stats_btn_on', 'Stats ON') : t('stats_btn_off', 'Stats OFF')"></span>
                                 </button>
 
                                 <!-- Reset All Counters Modal Trigger -->
@@ -432,13 +454,13 @@
                                         <polyline points="1 4 1 10 7 10"></polyline>
                                         <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                                     </svg>
-                                    <span>Reset</span>
+                                    <span x-text="t('reset', 'Reset')">Reset</span>
                                 </button>
                             </div>
                         </div>
 
                         <!-- Keyboard Shortcuts Footer -->
-                        <div class="text-[11px] text-zinc-500 text-center pt-2">
+                        <div class="text-[11px] text-zinc-500 text-center pt-2" x-html="t('shortcuts')">
                             Shortcuts: Space Play/Pause &bull; &larr; / &rarr; &plusmn;5s &bull; [ / ] &plusmn;1 Frame &bull; R Restart &bull; N Stats
                         </div>
                     </div>
@@ -518,7 +540,7 @@
                         </div>
                         <div class="pt-3 mt-2 border-t border-zinc-800 flex justify-between items-center shrink-0" x-show="alerts.length > 0">
                             <span class="text-[11px] text-zinc-500" x-text="alerts.length + ' ' + t('records')"></span>
-                            <button @click="clearAlerts()" class="px-2 py-1 text-[11px] rounded border border-rose-900/60 text-rose-400 hover:bg-rose-950/50 transition-colors">Clear All</button>
+                            <button @click="clearAlerts()" class="px-2 py-1 text-[11px] rounded border border-rose-900/60 text-rose-400 hover:bg-rose-950/50 transition-colors" x-text="t('btn_clear_all', 'Clear All')">Clear All</button>
                         </div>
                     </div>
 
@@ -574,8 +596,8 @@
                     Reset detector counts and restart video from beginning?
                 </p>
                 <div class="modal-action flex justify-end gap-2 pt-2">
-                    <button class="px-3 py-1.5 rounded-md text-xs text-zinc-400 hover:text-zinc-200 transition-colors" @click="resetModalOpen = false">Cancel</button>
-                    <button class="px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-900 hover:bg-rose-800 text-white transition-colors" @click="confirmReset()">Confirm Reset</button>
+                    <button class="px-3 py-1.5 rounded-md text-xs text-zinc-400 hover:text-zinc-200 transition-colors" @click="resetModalOpen = false" x-text="t('btn_cancel', 'Cancel')">Cancel</button>
+                    <button class="px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-900 hover:bg-rose-800 text-white transition-colors" @click="confirmReset()" x-text="t('btn_confirm_reset', 'Confirm Reset')">Confirm Reset</button>
                 </div>
             </div>
             <form method="dialog" class="modal-backdrop bg-black/60 backdrop-blur-xs" @click="resetModalOpen = false">

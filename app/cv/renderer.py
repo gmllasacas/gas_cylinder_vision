@@ -71,10 +71,11 @@ class FrameRenderer:
         frame: np.ndarray,
         boxes_list: List[Tuple[List[float], float, int, Optional[int]]],
         track_history: Dict[int, List[Tuple[int, int]]],
-        get_class_name_fn: Callable[[int], str]
+        get_class_name_fn: Callable[[int], str],
+        copy: bool = True
     ) -> np.ndarray:
         """Draws counting lines, localized direction hints, bounding boxes, labels, and trajectories."""
-        annotated = frame.copy()
+        annotated = frame.copy() if copy else frame
 
         out_text = self.i18n.t("video.out_text", "^ OUT (Above)")
         in_text = self.i18n.t("video.in_text", "v IN (Below)")

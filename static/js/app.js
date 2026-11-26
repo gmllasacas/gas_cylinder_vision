@@ -61,7 +61,8 @@ document.addEventListener('alpine:init', () => {
         currentLang: 'es',
         localeData: {},
         
-        // Internal audio & polling references
+        // Internal audio, SSE & polling references
+        eventSource: null,
         pollTimer: null,
         lastSeenAlertId: -1,
         audioUnlocked: false,
@@ -85,8 +86,8 @@ document.addEventListener('alpine:init', () => {
             await this.fetchAlerts();
             await this.fetchHistory();
 
-            // 5. Start high-frequency telemetry polling (200ms)
-            this.pollTimer = setInterval(() => this.fetchStatus(), 200);
+            // 5. Connect SSE telemetry stream with fallback polling
+            this.setupTelemetryStream();
 
             // 6. Setup global keyboard shortcuts
             this.setupKeyboardShortcuts();
@@ -94,10 +95,48 @@ document.addEventListener('alpine:init', () => {
 
         // Helper to translate keys from loaded locale dictionary
         t(key, fallback = '') {
-            if (this.localeData && this.localeData.ui && this.localeData.ui[key]) {
-                return this.localeData.ui[key];
+            if (!this.localeData) return fallback || key;
+            if (this.localeData.ui && this.localeData.ui[key]) return this.localeData.ui[key];
+            if (this.localeData.video && this.localeData.video[key]) return this.localeData.video[key];
+            if (this.localeData.alerts && this.localeData.alerts[key]) return this.localeData.alerts[key];
+            if (typeof key === 'string' && key.includes('.')) {
+                const parts = key.split('.');
+                let curr = this.localeData;
+                for (const p of parts) {
+                    if (curr && typeof curr === 'object' && p in curr) {
+                        curr = curr[p];
+                    } else {
+                        curr = null;
+                        break;
+                    }
+                }
+                if (curr && typeof curr === 'string') return curr;
             }
             return fallback || key;
+        },
+
+        async fetchSources() {
+            try {
+                const res = await fetch('/api/videos');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.sources = data.sources || [];
+                }
+            } catch (err) {
+                console.error("Failed fetching sources:", err);
+            }
+        },
+
+        async selectSource(sourceId) {
+            try {
+                const res = await fetch(`/api/videos/select?filename=${encodeURIComponent(sourceId)}`, { method: 'POST' });
+                if (res.ok) {
+                    await this.fetchStatus();
+                    await this.fetchSources();
+                }
+            } catch (err) {
+                console.error("Failed selecting source:", err);
+            }
         },
 
         async loadLocale(lang) {
@@ -106,7 +145,7 @@ document.addEventListener('alpine:init', () => {
                 if (res.ok) {
                     this.localeData = await res.json();
                     this.currentLang = lang;
-                    document.cookie = `app_lang=${lang};path=/;max-age=31536000`;
+                    document.cookie = `app_lang=${lang};path=/;max-age=31536000;SameSite=Lax`;
                 }
             } catch (err) {
                 console.error("Failed loading locale:", err);
@@ -150,6 +189,9 @@ document.addEventListener('alpine:init', () => {
         playChimeSound() {
             try {
                 if (!this.audioCtx) return;
+                if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
                 const now = this.audioCtx.currentTime;
                 const master = this.audioCtx.createGain();
                 master.gain.setValueAtTime(0.9, now);
@@ -202,55 +244,72 @@ document.addEventListener('alpine:init', () => {
             }, 6000);
         },
 
+        setupTelemetryStream() {
+            if (window.EventSource) {
+                try {
+                    this.eventSource = new EventSource('/api/status/stream');
+                    this.eventSource.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.applyStatusData(data);
+                        } catch (e) {
+                            console.error("Error parsing SSE telemetry:", e);
+                        }
+                    };
+                    this.eventSource.onerror = (err) => {
+                        console.warn("SSE connection error, falling back to 500ms polling", err);
+                        if (this.eventSource) {
+                            this.eventSource.close();
+                            this.eventSource = null;
+                        }
+                        this.startFallbackPolling();
+                    };
+                    return;
+                } catch (e) {
+                    console.warn("Failed initializing EventSource, using fallback polling", e);
+                }
+            }
+            this.startFallbackPolling();
+        },
+
+        startFallbackPolling() {
+            if (!this.pollTimer) {
+                this.pollTimer = setInterval(() => this.fetchStatus(), 500);
+            }
+        },
+
+        applyStatusData(data) {
+            // Detect new anomalies
+            if (data.latest_alert && data.latest_alert.id > this.lastSeenAlertId) {
+                if (this.lastSeenAlertId !== -1) {
+                    this.triggerAlertNotification(data.latest_alert);
+                    this.fetchAlerts();
+                }
+                this.lastSeenAlertId = data.latest_alert.id;
+            }
+
+            this.status = data;
+
+            // Sync slider position only if the user is not actively scrubbing
+            if (!this.isScrubbing) {
+                this.sliderFrame = data.current_frame;
+            }
+            if (!this.isConfDragging && data.conf !== undefined) {
+                this.confValue = Number(data.conf).toFixed(2);
+            }
+            if (data.playback_speed !== undefined) {
+                this.speedValue = Number(data.playback_speed).toFixed(2);
+            }
+        },
+
         async fetchStatus() {
             try {
                 const res = await fetch('/api/status');
                 if (!res.ok) return;
                 const data = await res.json();
-                
-                // Detect new anomalies
-                if (data.latest_alert && data.latest_alert.id > this.lastSeenAlertId) {
-                    if (this.lastSeenAlertId !== -1) {
-                        this.triggerAlertNotification(data.latest_alert);
-                        this.fetchAlerts();
-                    }
-                    this.lastSeenAlertId = data.latest_alert.id;
-                }
-
-                this.status = data;
-
-                // Sync slider position only if the user is not actively scrubbing
-                if (!this.isScrubbing) {
-                    this.sliderFrame = data.current_frame;
-                }
-                if (!this.isConfDragging && data.conf !== undefined) {
-                    this.confValue = Number(data.conf).toFixed(2);
-                }
-                if (data.playback_speed !== undefined) {
-                    this.speedValue = Number(data.playback_speed).toFixed(2);
-                }
+                this.applyStatusData(data);
             } catch (err) {
                 console.error("Telemetry fetch error:", err);
-            }
-        },
-
-        async fetchSources() {
-            try {
-                const res = await fetch('/api/sources');
-                if (res.ok) {
-                    this.sources = await res.json();
-                }
-            } catch (err) {
-                console.error("Failed fetching sources:", err);
-            }
-        },
-
-        async changeSource(sourceId) {
-            try {
-                await fetch(`/api/sources/change?source_id=${encodeURIComponent(sourceId)}`, { method: 'POST' });
-                await this.fetchStatus();
-            } catch (err) {
-                console.error("Source change error:", err);
             }
         },
 

@@ -1,6 +1,7 @@
-﻿from datetime import datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
-from app.core import logger
+from app.core import settings, logger
 from app.db.database import DatabaseManager
 
 class DailyCountRepository:
@@ -10,12 +11,19 @@ class DailyCountRepository:
         self.db = db_manager or DatabaseManager()
 
     @staticmethod
-    def _today_str() -> str:
-        return datetime.now().strftime("%Y-%m-%d")
+    def _get_tz() -> ZoneInfo:
+        try:
+            return ZoneInfo(getattr(settings, "timezone", "America/Lima"))
+        except Exception:
+            return ZoneInfo("UTC")
 
-    @staticmethod
-    def _now_iso() -> str:
-        return datetime.now().isoformat()
+    @classmethod
+    def _today_str(cls) -> str:
+        return datetime.now(cls._get_tz()).strftime("%Y-%m-%d")
+
+    @classmethod
+    def _now_iso(cls) -> str:
+        return datetime.now(cls._get_tz()).isoformat()
 
     def get_or_create_daily(self, target_date: Optional[str] = None) -> Dict[str, Any]:
         """Returns the daily count record for target_date (default: today), creating it if absent."""

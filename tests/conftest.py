@@ -31,9 +31,10 @@ def test_db_isolation(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def client():
-    """FastAPI TestClient session fixture."""
+    """FastAPI TestClient session fixture with admin auth credentials."""
     from app.main import app
     with TestClient(app) as test_client:
+        test_client.auth = ("admin", "admin")
         yield test_client
 
 @pytest.fixture

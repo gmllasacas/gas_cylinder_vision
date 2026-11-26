@@ -24,6 +24,7 @@ class VideoCaptureManager:
         self.video_fps = 25.0
         self.current_frame = 0
         self.loop = True
+        self.just_looped = False
 
     @staticmethod
     def is_live_url(source: str) -> bool:
@@ -59,6 +60,7 @@ class VideoCaptureManager:
         self.is_live_stream = self.is_live_url(source_path)
         self.last_reconnect_attempt = time.time()
         self.current_frame = 0
+        self.just_looped = False
 
         try:
             if self.is_live_stream:
@@ -104,8 +106,8 @@ class VideoCaptureManager:
                 self.connection_error_msg = "Could not open stream endpoint or video file."
         except Exception as e:
             self.camera_connected = False
-            self.connection_error_msg = str(e)
-            logger.error(f"Failed to open source {self.mask_credentials(source_path)}: {e}")
+            self.connection_error_msg = self.mask_credentials(str(e))
+            logger.error(f"Failed to open source {self.mask_credentials(source_path)}: {self.connection_error_msg}")
 
         return False, None
 
@@ -127,6 +129,7 @@ class VideoCaptureManager:
         if not self.is_live_stream and self.loop and self.total_frames > 0:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             self.current_frame = 0
+            self.just_looped = True
             success, frame = self.cap.read()
             if success and frame is not None:
                 return True, frame
